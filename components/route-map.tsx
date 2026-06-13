@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Route } from "lucide-react";
-import { loadGoogleMaps } from "@/lib/google-maps";
+import {
+  isMissingGoogleMapsApiKeyError,
+  loadGoogleMaps,
+  logGoogleMapsKeyStatusInDevelopment
+} from "@/lib/google-maps";
 import type { TripDraft } from "@/lib/booking";
 
 type RouteMapProps = {
@@ -11,11 +15,13 @@ type RouteMapProps = {
 
 export function RouteMap({ trip }: RouteMapProps) {
   const mapRef = useRef<HTMLDivElement | null>(null);
-  const [status, setStatus] = useState<"loading" | "ready" | "fallback">("loading");
+  const [status, setStatus] = useState<"loading" | "ready" | "fallback" | "missing-key">("loading");
   const [message, setMessage] = useState("Loading route map...");
 
   useEffect(() => {
     let active = true;
+
+    logGoogleMapsKeyStatusInDevelopment();
 
     if (!trip?.pickup || !trip.dropoff) {
       setStatus("fallback");
@@ -71,10 +77,17 @@ export function RouteMap({ trip }: RouteMapProps) {
           }
         );
       })
-      .catch(() => {
-        if (active) {
+      .catch((error: unknown) => {
+        if (!active) {
+          return;
+        }
+
+        if (isMissingGoogleMapsApiKeyError(error)) {
+          setStatus("missing-key");
+          setMessage("Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to show the live route preview.");
+        } else {
           setStatus("fallback");
-          setMessage("Add a valid Google Maps API key to show the live route preview.");
+          setMessage("Google Maps could not load right now. Check API restrictions, billing, and enabled Maps JavaScript, Places, and Directions APIs.");
         }
       });
 
@@ -83,7 +96,7 @@ export function RouteMap({ trip }: RouteMapProps) {
     };
   }, [trip]);
 
-  if (status === "fallback") {
+  if (status === "fallback" || status === "missing-key") {
     return (
       <div className="map-grid grid min-h-[320px] place-items-center rounded border border-ink/10 bg-white p-8 text-center shadow-soft">
         <div className="max-w-md">

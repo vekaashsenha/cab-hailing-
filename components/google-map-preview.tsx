@@ -2,14 +2,22 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MapPinned } from "lucide-react";
-import { loadGoogleMaps } from "@/lib/google-maps";
+import {
+  isMissingGoogleMapsApiKeyError,
+  loadGoogleMaps,
+  logGoogleMapsKeyStatusInDevelopment
+} from "@/lib/google-maps";
+
+type MapStatus = "loading" | "ready" | "missing-key" | "unavailable";
 
 export function GoogleMapPreview() {
   const mapRef = useRef<HTMLDivElement | null>(null);
-  const [status, setStatus] = useState<"loading" | "ready" | "fallback">("loading");
+  const [status, setStatus] = useState<MapStatus>("loading");
 
   useEffect(() => {
     let active = true;
+
+    logGoogleMapsKeyStatusInDevelopment();
 
     loadGoogleMaps()
       .then((googleApi) => {
@@ -37,10 +45,12 @@ export function GoogleMapPreview() {
 
         setStatus("ready");
       })
-      .catch(() => {
-        if (active) {
-          setStatus("fallback");
+      .catch((error: unknown) => {
+        if (!active) {
+          return;
         }
+
+        setStatus(isMissingGoogleMapsApiKeyError(error) ? "missing-key" : "unavailable");
       });
 
     return () => {
@@ -48,14 +58,24 @@ export function GoogleMapPreview() {
     };
   }, []);
 
-  if (status === "fallback") {
+  if (status === "missing-key" || status === "unavailable") {
+    const isMissingKey = status === "missing-key";
+
     return (
       <div className="map-grid grid min-h-[360px] place-items-center rounded border border-ink/10 bg-white p-8 text-center shadow-soft">
         <div className="max-w-md">
           <MapPinned className="mx-auto mb-4 h-10 w-10 text-ember" />
-          <h3 className="text-xl font-semibold">Map preview is ready for your API key</h3>
+          <h3 className="text-xl font-semibold">
+            {isMissingKey ? "Map preview is ready for your API key" : "Map preview is temporarily unavailable"}
+          </h3>
           <p className="mt-3 text-sm leading-6 text-ink/70">
-            Add <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> to enable the live Google Map and Places suggestions.
+            {isMissingKey ? (
+              <>
+                Add <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> to enable the live Google Map and Places suggestions.
+              </>
+            ) : (
+              "Google Maps could not load right now. Check API restrictions, billing, and enabled Maps JavaScript and Places APIs."
+            )}
           </p>
         </div>
       </div>

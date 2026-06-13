@@ -1,7 +1,27 @@
 let googleMapsPromise: Promise<typeof google> | null = null;
 
+export class MissingGoogleMapsApiKeyError extends Error {
+  constructor() {
+    super("Google Maps API key is missing.");
+    this.name = "MissingGoogleMapsApiKeyError";
+  }
+}
+
 export function getGoogleMapsApiKey() {
   return process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? "";
+}
+
+export function isMissingGoogleMapsApiKeyError(error: unknown) {
+  return error instanceof MissingGoogleMapsApiKeyError;
+}
+
+export function logGoogleMapsKeyStatusInDevelopment() {
+  if (process.env.NODE_ENV === "development") {
+    console.info(
+      "[Google Maps debug] NEXT_PUBLIC_GOOGLE_MAPS_API_KEY exists:",
+      Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY)
+    );
+  }
 }
 
 export function loadGoogleMaps() {
@@ -12,7 +32,7 @@ export function loadGoogleMaps() {
   const key = getGoogleMapsApiKey();
 
   if (!key) {
-    return Promise.reject(new Error("Google Maps API key is missing."));
+    return Promise.reject(new MissingGoogleMapsApiKeyError());
   }
 
   if (window.google?.maps) {

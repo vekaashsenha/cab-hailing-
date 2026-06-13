@@ -4,7 +4,13 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CalendarDays, CarFront, Clock, LocateFixed, MapPin, Search } from "lucide-react";
 import { emptyTrip, getTrip, rideTypes, saveTrip, type TripDraft } from "@/lib/booking";
-import { loadGoogleMaps } from "@/lib/google-maps";
+import {
+  isMissingGoogleMapsApiKeyError,
+  loadGoogleMaps,
+  logGoogleMapsKeyStatusInDevelopment
+} from "@/lib/google-maps";
+
+type MapsAutocompleteStatus = "loading" | "ready" | "missing-key" | "unavailable";
 
 export function BookingSearchForm() {
   const router = useRouter();
@@ -12,7 +18,7 @@ export function BookingSearchForm() {
   const dropoffRef = useRef<HTMLInputElement | null>(null);
   const [trip, setTrip] = useState<TripDraft>(emptyTrip);
   const [message, setMessage] = useState("");
-  const [mapsReady, setMapsReady] = useState(false);
+  const [mapsStatus, setMapsStatus] = useState<MapsAutocompleteStatus>("loading");
 
   useEffect(() => {
     const savedTrip = getTrip();
@@ -23,6 +29,8 @@ export function BookingSearchForm() {
 
   useEffect(() => {
     let active = true;
+
+    logGoogleMapsKeyStatusInDevelopment();
 
     loadGoogleMaps()
       .then((googleApi) => {
@@ -48,9 +56,19 @@ export function BookingSearchForm() {
           setTrip((current) => ({ ...current, dropoff: value }));
         });
 
-        setMapsReady(true);
+        setMapsStatus("ready");
       })
-      .catch(() => setMapsReady(false));
+      .catch((error: unknown) => {
+        if (!active) {
+          return;
+        }
+
+        setMapsStatus(isMissingGoogleMapsApiKeyError(error) ? "missing-key" : "unavailable");
+
+        if (process.env.NODE_ENV === "development" && !isMissingGoogleMapsApiKeyError(error)) {
+          console.info("[Google Maps debug] Maps script did not load; check API restrictions and enabled APIs.");
+        }
+      });
 
     return () => {
       active = false;
@@ -84,7 +102,13 @@ export function BookingSearchForm() {
         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-ember">Book your ride</p>
         <h2 className="mt-2 font-serif text-3xl font-semibold">Where should we pick you up?</h2>
         <p className="mt-2 text-sm text-ink/60">
-          {mapsReady ? "Places suggestions are enabled." : "Enter addresses manually or add a Maps key for suggestions."}
+          {mapsStatus === "ready"
+            ? "Places suggestions are enabled."
+            : mapsStatus === "missing-key"
+              ? "Enter addresses manually or add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY for suggestions."
+              : mapsStatus === "unavailable"
+                ? "Enter addresses manually while Google Places is unavailable."
+                : "Loading Google Places suggestions."}
         </p>
       </div>
 
