@@ -2,11 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Route } from "lucide-react";
-import {
-  isMissingGoogleMapsApiKeyError,
-  loadGoogleMaps,
-  logGoogleMapsKeyStatusInDevelopment
-} from "@/lib/google-maps";
+import { isMissingGoogleMapsApiKeyError, loadGoogleMaps } from "@/lib/google-maps";
 import type { TripDraft } from "@/lib/booking";
 
 type RouteMapProps = {
@@ -20,8 +16,6 @@ export function RouteMap({ trip }: RouteMapProps) {
 
   useEffect(() => {
     let active = true;
-
-    logGoogleMapsKeyStatusInDevelopment();
 
     if (!trip?.pickup || !trip.dropoff) {
       setStatus("fallback");

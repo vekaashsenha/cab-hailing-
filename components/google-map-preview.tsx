@@ -2,11 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MapPinned } from "lucide-react";
-import {
-  isMissingGoogleMapsApiKeyError,
-  loadGoogleMaps,
-  logGoogleMapsKeyStatusInDevelopment
-} from "@/lib/google-maps";
+import { isMissingGoogleMapsApiKeyError, loadGoogleMaps } from "@/lib/google-maps";
 
 type MapStatus = "loading" | "ready" | "missing-key" | "unavailable";
 
@@ -16,8 +12,6 @@ export function GoogleMapPreview() {
 
   useEffect(() => {
     let active = true;
-
-    logGoogleMapsKeyStatusInDevelopment();
 
     loadGoogleMaps()
       .then((googleApi) => {

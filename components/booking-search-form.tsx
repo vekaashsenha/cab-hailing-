@@ -4,11 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CalendarDays, CarFront, Clock, LocateFixed, MapPin, Search } from "lucide-react";
 import { emptyTrip, getTrip, rideTypes, saveTrip, type TripDraft } from "@/lib/booking";
-import {
-  isMissingGoogleMapsApiKeyError,
-  loadGoogleMaps,
-  logGoogleMapsKeyStatusInDevelopment
-} from "@/lib/google-maps";
+import { isMissingGoogleMapsApiKeyError, loadGoogleMaps } from "@/lib/google-maps";
 
 type MapsAutocompleteStatus = "loading" | "ready" | "missing-key" | "unavailable";
 
@@ -29,8 +25,6 @@ export function BookingSearchForm() {
 
   useEffect(() => {
     let active = true;
-
-    logGoogleMapsKeyStatusInDevelopment();
 
     loadGoogleMaps()
       .then((googleApi) => {
@@ -64,10 +58,6 @@ export function BookingSearchForm() {
         }
 
         setMapsStatus(isMissingGoogleMapsApiKeyError(error) ? "missing-key" : "unavailable");
-
-        if (process.env.NODE_ENV === "development" && !isMissingGoogleMapsApiKeyError(error)) {
-          console.info("[Google Maps debug] Maps script did not load; check API restrictions and enabled APIs.");
-        }
       });
 
     return () => {

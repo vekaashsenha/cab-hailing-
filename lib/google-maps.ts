@@ -1,4 +1,5 @@
 let googleMapsPromise: Promise<typeof google> | null = null;
+let googleMapsApiKeyPromise: Promise<string> | null = null;
 
 export class MissingGoogleMapsApiKeyError extends Error {
   constructor() {
@@ -15,21 +16,46 @@ export function isMissingGoogleMapsApiKeyError(error: unknown) {
   return error instanceof MissingGoogleMapsApiKeyError;
 }
 
-export function logGoogleMapsKeyStatusInDevelopment() {
-  if (process.env.NODE_ENV === "development") {
-    console.info(
-      "[Google Maps debug] NEXT_PUBLIC_GOOGLE_MAPS_API_KEY exists:",
-      Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY)
-    );
+async function getRuntimeGoogleMapsApiKey() {
+  if (googleMapsApiKeyPromise) {
+    return googleMapsApiKeyPromise;
   }
+
+  googleMapsApiKeyPromise = fetch("/api/google-maps-key", {
+    cache: "no-store"
+  })
+    .then((response) => {
+      if (!response.ok) {
+        throw new Error("Google Maps API key check failed.");
+      }
+
+      return response.json() as Promise<{ apiKey?: string }>;
+    })
+    .then((data) => data.apiKey?.trim() ?? "");
+
+  return googleMapsApiKeyPromise;
 }
 
-export function loadGoogleMaps() {
+async function resolveGoogleMapsApiKey() {
+  const bundledKey = getGoogleMapsApiKey();
+
+  if (bundledKey) {
+    return bundledKey;
+  }
+
+  if (typeof window === "undefined") {
+    return "";
+  }
+
+  return getRuntimeGoogleMapsApiKey();
+}
+
+export async function loadGoogleMaps() {
   if (typeof window === "undefined") {
     return Promise.reject(new Error("Google Maps can only load in the browser."));
   }
 
-  const key = getGoogleMapsApiKey();
+  const key = await resolveGoogleMapsApiKey();
 
   if (!key) {
     return Promise.reject(new MissingGoogleMapsApiKeyError());
