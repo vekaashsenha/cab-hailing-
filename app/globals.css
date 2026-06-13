@@ -1,0 +1,44 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #f7f5ef;
+  --foreground: #101820;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  background: var(--background);
+  color: var(--foreground);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.hero-image {
+  background-image:
+    linear-gradient(90deg, rgba(16, 24, 32, 0.9), rgba(16, 24, 32, 0.66), rgba(16, 24, 32, 0.2)),
+    url("https://images.unsplash.com/photo-1511919884226-fd3cad34687c?auto=format&fit=crop&w=1800&q=80");
+  background-position: center;
+  background-size: cover;
+}
+
+.map-grid {
+  background-image:
+    linear-gradient(rgba(16, 24, 32, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 24, 32, 0.08) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
