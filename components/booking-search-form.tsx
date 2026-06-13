@@ -4,9 +4,15 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CalendarDays, CarFront, Clock, LocateFixed, MapPin, Search } from "lucide-react";
 import { emptyTrip, getTrip, rideTypes, saveTrip, type TripDraft } from "@/lib/booking";
-import { isMissingGoogleMapsApiKeyError, loadGoogleMaps } from "@/lib/google-maps";
+import { getGoogleMapsFailureReason, loadGoogleMaps } from "@/lib/google-maps";
 
-type MapsAutocompleteStatus = "loading" | "ready" | "missing-key" | "unavailable";
+type MapsAutocompleteStatus =
+  | "loading"
+  | "ready"
+  | "key-missing"
+  | "script-failed"
+  | "places-unavailable"
+  | "autocomplete-failed";
 
 export function BookingSearchForm() {
   const router = useRouter();
@@ -32,32 +38,36 @@ export function BookingSearchForm() {
           return;
         }
 
-        const options: google.maps.places.AutocompleteOptions = {
-          fields: ["formatted_address", "name", "geometry"]
-        };
-        const pickupAutocomplete = new googleApi.maps.places.Autocomplete(pickupRef.current, options);
-        const dropoffAutocomplete = new googleApi.maps.places.Autocomplete(dropoffRef.current, options);
+        try {
+          const options: google.maps.places.AutocompleteOptions = {
+            fields: ["formatted_address", "name", "geometry"]
+          };
+          const pickupAutocomplete = new googleApi.maps.places.Autocomplete(pickupRef.current, options);
+          const dropoffAutocomplete = new googleApi.maps.places.Autocomplete(dropoffRef.current, options);
 
-        pickupAutocomplete.addListener("place_changed", () => {
-          const place = pickupAutocomplete.getPlace();
-          const value = place.formatted_address || place.name || pickupRef.current?.value || "";
-          setTrip((current) => ({ ...current, pickup: value }));
-        });
+          pickupAutocomplete.addListener("place_changed", () => {
+            const place = pickupAutocomplete.getPlace();
+            const value = place.formatted_address || place.name || pickupRef.current?.value || "";
+            setTrip((current) => ({ ...current, pickup: value }));
+          });
 
-        dropoffAutocomplete.addListener("place_changed", () => {
-          const place = dropoffAutocomplete.getPlace();
-          const value = place.formatted_address || place.name || dropoffRef.current?.value || "";
-          setTrip((current) => ({ ...current, dropoff: value }));
-        });
+          dropoffAutocomplete.addListener("place_changed", () => {
+            const place = dropoffAutocomplete.getPlace();
+            const value = place.formatted_address || place.name || dropoffRef.current?.value || "";
+            setTrip((current) => ({ ...current, dropoff: value }));
+          });
 
-        setMapsStatus("ready");
+          setMapsStatus("ready");
+        } catch {
+          setMapsStatus("autocomplete-failed");
+        }
       })
       .catch((error: unknown) => {
         if (!active) {
           return;
         }
 
-        setMapsStatus(isMissingGoogleMapsApiKeyError(error) ? "missing-key" : "unavailable");
+        setMapsStatus(getGoogleMapsFailureReason(error));
       });
 
     return () => {
@@ -92,13 +102,7 @@ export function BookingSearchForm() {
         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-ember">Book your ride</p>
         <h2 className="mt-2 font-serif text-3xl font-semibold">Where should we pick you up?</h2>
         <p className="mt-2 text-sm text-ink/60">
-          {mapsStatus === "ready"
-            ? "Places suggestions are enabled."
-            : mapsStatus === "missing-key"
-              ? "Enter addresses manually or add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY for suggestions."
-              : mapsStatus === "unavailable"
-                ? "Enter addresses manually while Google Places is unavailable."
-                : "Loading Google Places suggestions."}
+          {getAutocompleteStatusMessage(mapsStatus)}
         </p>
       </div>
 
@@ -188,4 +192,22 @@ export function BookingSearchForm() {
       </button>
     </form>
   );
+}
+
+function getAutocompleteStatusMessage(status: MapsAutocompleteStatus) {
+  switch (status) {
+    case "ready":
+      return "Places suggestions are enabled.";
+    case "key-missing":
+      return "Google Maps key is missing. Enter addresses manually until NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is configured.";
+    case "script-failed":
+      return "Google Maps script failed to load. Enter addresses manually for now.";
+    case "places-unavailable":
+      return "Google Places is unavailable. Enable the Places library and enter addresses manually for now.";
+    case "autocomplete-failed":
+      return "Google Places Autocomplete could not attach to the pickup and drop inputs.";
+    case "loading":
+    default:
+      return "Loading Google Places suggestions.";
+  }
 }

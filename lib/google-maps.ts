@@ -1,10 +1,17 @@
 let googleMapsPromise: Promise<typeof google> | null = null;
-let googleMapsApiKeyPromise: Promise<string> | null = null;
 
-export class MissingGoogleMapsApiKeyError extends Error {
-  constructor() {
-    super("Google Maps API key is missing.");
-    this.name = "MissingGoogleMapsApiKeyError";
+export type GoogleMapsFailureReason =
+  | "key-missing"
+  | "script-failed"
+  | "places-unavailable";
+
+export class GoogleMapsLoadError extends Error {
+  constructor(
+    message: string,
+    public readonly reason: GoogleMapsFailureReason
+  ) {
+    super(message);
+    this.name = "GoogleMapsLoadError";
   }
 }
 
@@ -12,56 +19,26 @@ export function getGoogleMapsApiKey() {
   return process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? "";
 }
 
-export function isMissingGoogleMapsApiKeyError(error: unknown) {
-  return error instanceof MissingGoogleMapsApiKeyError;
-}
-
-async function getRuntimeGoogleMapsApiKey() {
-  if (googleMapsApiKeyPromise) {
-    return googleMapsApiKeyPromise;
-  }
-
-  googleMapsApiKeyPromise = fetch("/api/google-maps-key", {
-    cache: "no-store"
-  })
-    .then((response) => {
-      if (!response.ok) {
-        throw new Error("Google Maps API key check failed.");
-      }
-
-      return response.json() as Promise<{ apiKey?: string }>;
-    })
-    .then((data) => data.apiKey?.trim() ?? "");
-
-  return googleMapsApiKeyPromise;
-}
-
-async function resolveGoogleMapsApiKey() {
-  const bundledKey = getGoogleMapsApiKey();
-
-  if (bundledKey) {
-    return bundledKey;
-  }
-
-  if (typeof window === "undefined") {
-    return "";
-  }
-
-  return getRuntimeGoogleMapsApiKey();
+export function getGoogleMapsFailureReason(error: unknown): GoogleMapsFailureReason {
+  return error instanceof GoogleMapsLoadError ? error.reason : "script-failed";
 }
 
 export async function loadGoogleMaps() {
   if (typeof window === "undefined") {
-    return Promise.reject(new Error("Google Maps can only load in the browser."));
+    return Promise.reject(new GoogleMapsLoadError("Google Maps can only load in the browser.", "script-failed"));
   }
 
-  const key = await resolveGoogleMapsApiKey();
+  const key = getGoogleMapsApiKey();
 
   if (!key) {
-    return Promise.reject(new MissingGoogleMapsApiKeyError());
+    return Promise.reject(new GoogleMapsLoadError("Google Maps API key is missing.", "key-missing"));
   }
 
   if (window.google?.maps) {
+    if (!window.google.maps.places?.Autocomplete) {
+      return Promise.reject(new GoogleMapsLoadError("Google Places library is unavailable.", "places-unavailable"));
+    }
+
     return Promise.resolve(window.google);
   }
 
@@ -73,8 +50,10 @@ export async function loadGoogleMaps() {
     const existingScript = document.getElementById("google-maps-script") as HTMLScriptElement | null;
 
     if (existingScript) {
-      existingScript.addEventListener("load", () => resolve(window.google));
-      existingScript.addEventListener("error", () => reject(new Error("Google Maps failed to load.")));
+      existingScript.addEventListener("load", () => resolveLoadedGoogleMaps(resolve, reject));
+      existingScript.addEventListener("error", () =>
+        reject(new GoogleMapsLoadError("Google Maps script failed to load.", "script-failed"))
+      );
       return;
     }
 
@@ -89,16 +68,28 @@ export async function loadGoogleMaps() {
     script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
     script.async = true;
     script.defer = true;
-    script.onload = () => {
-      if (window.google?.maps) {
-        resolve(window.google);
-      } else {
-        reject(new Error("Google Maps did not initialize."));
-      }
-    };
-    script.onerror = () => reject(new Error("Google Maps failed to load."));
+    script.onload = () => resolveLoadedGoogleMaps(resolve, reject);
+    script.onerror = () =>
+      reject(new GoogleMapsLoadError("Google Maps script failed to load.", "script-failed"));
     document.head.appendChild(script);
   });
 
   return googleMapsPromise;
+}
+
+function resolveLoadedGoogleMaps(
+  resolve: (googleApi: typeof google) => void,
+  reject: (error: GoogleMapsLoadError) => void
+) {
+  if (!window.google?.maps) {
+    reject(new GoogleMapsLoadError("Google Maps did not initialize.", "script-failed"));
+    return;
+  }
+
+  if (!window.google.maps.places?.Autocomplete) {
+    reject(new GoogleMapsLoadError("Google Places library is unavailable.", "places-unavailable"));
+    return;
+  }
+
+  resolve(window.google);
 }

@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MapPinned } from "lucide-react";
-import { isMissingGoogleMapsApiKeyError, loadGoogleMaps } from "@/lib/google-maps";
+import { getGoogleMapsFailureReason, loadGoogleMaps } from "@/lib/google-maps";
 
-type MapStatus = "loading" | "ready" | "missing-key" | "unavailable";
+type MapStatus = "loading" | "ready" | "key-missing" | "script-failed" | "places-unavailable";
 
 export function GoogleMapPreview() {
   const mapRef = useRef<HTMLDivElement | null>(null);
@@ -44,7 +44,7 @@ export function GoogleMapPreview() {
           return;
         }
 
-        setStatus(isMissingGoogleMapsApiKeyError(error) ? "missing-key" : "unavailable");
+        setStatus(getGoogleMapsFailureReason(error));
       });
 
     return () => {
@@ -52,25 +52,13 @@ export function GoogleMapPreview() {
     };
   }, []);
 
-  if (status === "missing-key" || status === "unavailable") {
-    const isMissingKey = status === "missing-key";
-
+  if (status !== "loading" && status !== "ready") {
     return (
       <div className="map-grid grid min-h-[360px] place-items-center rounded border border-ink/10 bg-white p-8 text-center shadow-soft">
         <div className="max-w-md">
           <MapPinned className="mx-auto mb-4 h-10 w-10 text-ember" />
-          <h3 className="text-xl font-semibold">
-            {isMissingKey ? "Map preview is ready for your API key" : "Map preview is temporarily unavailable"}
-          </h3>
-          <p className="mt-3 text-sm leading-6 text-ink/70">
-            {isMissingKey ? (
-              <>
-                Add <code>NEXT_PUBLIC_GOOGLE_MAPS_API_KEY</code> to enable the live Google Map and Places suggestions.
-              </>
-            ) : (
-              "Google Maps could not load right now. Check API restrictions, billing, and enabled Maps JavaScript and Places APIs."
-            )}
-          </p>
+          <h3 className="text-xl font-semibold">Map preview unavailable</h3>
+          <p className="mt-3 text-sm leading-6 text-ink/70">{getMapStatusMessage(status)}</p>
         </div>
       </div>
     );
@@ -86,4 +74,19 @@ export function GoogleMapPreview() {
       <div ref={mapRef} className="h-[360px] w-full" />
     </div>
   );
+}
+
+function getMapStatusMessage(status: MapStatus) {
+  switch (status) {
+    case "key-missing":
+      return "Google Maps key is missing. Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to enable the map.";
+    case "script-failed":
+      return "Google Maps script failed to load. Check network access, billing, and API key restrictions.";
+    case "places-unavailable":
+      return "Google Places is unavailable. Make sure the Places API is enabled for this key.";
+    case "loading":
+    case "ready":
+    default:
+      return "";
+  }
 }

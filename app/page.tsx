@@ -85,7 +85,7 @@ export default function Home() {
             </h2>
           </div>
           <p className="max-w-2xl text-sm leading-6 text-ink/70">
-            Add your Google Maps API key to unlock Places Autocomplete and map previews. Without a key, booking still works with a clear fallback.
+            Use address suggestions and route-aware previews when Google Maps is available. Booking continues gracefully if maps cannot load.
           </p>
         </div>
         <GoogleMapPreview />

@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Route } from "lucide-react";
-import { isMissingGoogleMapsApiKeyError, loadGoogleMaps } from "@/lib/google-maps";
+import { getGoogleMapsFailureReason, loadGoogleMaps } from "@/lib/google-maps";
 import type { TripDraft } from "@/lib/booking";
 
 type RouteMapProps = {
@@ -11,7 +11,7 @@ type RouteMapProps = {
 
 export function RouteMap({ trip }: RouteMapProps) {
   const mapRef = useRef<HTMLDivElement | null>(null);
-  const [status, setStatus] = useState<"loading" | "ready" | "fallback" | "missing-key">("loading");
+  const [status, setStatus] = useState<"loading" | "ready" | "fallback">("loading");
   const [message, setMessage] = useState("Loading route map...");
 
   useEffect(() => {
@@ -76,13 +76,8 @@ export function RouteMap({ trip }: RouteMapProps) {
           return;
         }
 
-        if (isMissingGoogleMapsApiKeyError(error)) {
-          setStatus("missing-key");
-          setMessage("Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to show the live route preview.");
-        } else {
-          setStatus("fallback");
-          setMessage("Google Maps could not load right now. Check API restrictions, billing, and enabled Maps JavaScript, Places, and Directions APIs.");
-        }
+        setStatus("fallback");
+        setMessage(getRouteMapStatusMessage(getGoogleMapsFailureReason(error)));
       });
 
     return () => {
@@ -90,7 +85,7 @@ export function RouteMap({ trip }: RouteMapProps) {
     };
   }, [trip]);
 
-  if (status === "fallback" || status === "missing-key") {
+  if (status === "fallback") {
     return (
       <div className="map-grid grid min-h-[320px] place-items-center rounded border border-ink/10 bg-white p-8 text-center shadow-soft">
         <div className="max-w-md">
@@ -112,4 +107,17 @@ export function RouteMap({ trip }: RouteMapProps) {
       <div ref={mapRef} className="h-[320px] w-full" />
     </div>
   );
+}
+
+function getRouteMapStatusMessage(reason: ReturnType<typeof getGoogleMapsFailureReason>) {
+  switch (reason) {
+    case "key-missing":
+      return "Google Maps key is missing. Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to show the live route preview.";
+    case "script-failed":
+      return "Google Maps script failed to load. Check network access, billing, and API key restrictions.";
+    case "places-unavailable":
+      return "Google Places is unavailable. Make sure the Places API is enabled before drawing routes.";
+    default:
+      return "Google Maps could not load right now.";
+  }
 }
