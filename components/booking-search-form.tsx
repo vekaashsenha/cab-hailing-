@@ -12,6 +12,8 @@ import {
   updateGoogleMapsDebugState
 } from "@/lib/google-maps";
 
+const showMapsDebugPanel = process.env.NODE_ENV !== "production";
+
 type MapsAutocompleteStatus =
   | "loading"
   | "ready"
@@ -146,7 +148,7 @@ export function BookingSearchForm() {
         <p className="mt-2 text-sm text-ink/60">
           {getAutocompleteStatusMessage(mapsStatus)}
         </p>
-        <GoogleMapsDebugPanel />
+        {showMapsDebugPanel ? <GoogleMapsDebugPanel /> : null}
       </div>
 
       <div className="grid gap-4">
