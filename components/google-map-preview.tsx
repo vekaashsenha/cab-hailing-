@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { MapPinned } from "lucide-react";
-import { getGoogleMapsFailureReason, loadGoogleMaps } from "@/lib/google-maps";
+import {
+  getGoogleMapsErrorMessage,
+  getGoogleMapsFailureReason,
+  loadGoogleMaps,
+  updateGoogleMapsDebugState
+} from "@/lib/google-maps";
 
 type MapStatus = "loading" | "ready" | "key-missing" | "script-failed" | "places-unavailable";
 
@@ -45,6 +50,9 @@ export function GoogleMapPreview() {
         }
 
         setStatus(getGoogleMapsFailureReason(error));
+        updateGoogleMapsDebugState({
+          lastErrorMessage: getGoogleMapsErrorMessage(error)
+        });
       });
 
     return () => {

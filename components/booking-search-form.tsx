@@ -4,7 +4,13 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CalendarDays, CarFront, Clock, LocateFixed, MapPin, Search } from "lucide-react";
 import { emptyTrip, getTrip, rideTypes, saveTrip, type TripDraft } from "@/lib/booking";
-import { getGoogleMapsFailureReason, loadGoogleMaps } from "@/lib/google-maps";
+import { GoogleMapsDebugPanel } from "@/components/google-maps-debug-panel";
+import {
+  getGoogleMapsErrorMessage,
+  getGoogleMapsFailureReason,
+  loadGoogleMaps,
+  updateGoogleMapsDebugState
+} from "@/lib/google-maps";
 
 type MapsAutocompleteStatus =
   | "loading"
@@ -31,10 +37,23 @@ export function BookingSearchForm() {
 
   useEffect(() => {
     let active = true;
+    let pickupAutocomplete: google.maps.places.Autocomplete | null = null;
+    let dropoffAutocomplete: google.maps.places.Autocomplete | null = null;
+
+    updateGoogleMapsDebugState({
+      pickupAutocompleteAttached: false,
+      dropAutocompleteAttached: false
+    });
 
     loadGoogleMaps()
       .then((googleApi) => {
         if (!active || !pickupRef.current || !dropoffRef.current) {
+          updateGoogleMapsDebugState({
+            pickupAutocompleteAttached: false,
+            dropAutocompleteAttached: false,
+            lastErrorMessage: "Homepage pickup and drop input refs were not ready."
+          });
+          setMapsStatus("autocomplete-failed");
           return;
         }
 
@@ -42,23 +61,36 @@ export function BookingSearchForm() {
           const options: google.maps.places.AutocompleteOptions = {
             fields: ["formatted_address", "name", "geometry"]
           };
-          const pickupAutocomplete = new googleApi.maps.places.Autocomplete(pickupRef.current, options);
-          const dropoffAutocomplete = new googleApi.maps.places.Autocomplete(dropoffRef.current, options);
+          pickupAutocomplete = new googleApi.maps.places.Autocomplete(pickupRef.current, options);
+          dropoffAutocomplete = new googleApi.maps.places.Autocomplete(dropoffRef.current, options);
 
           pickupAutocomplete.addListener("place_changed", () => {
-            const place = pickupAutocomplete.getPlace();
-            const value = place.formatted_address || place.name || pickupRef.current?.value || "";
+            const place = pickupAutocomplete?.getPlace();
+            const value = place?.formatted_address || place?.name || pickupRef.current?.value || "";
             setTrip((current) => ({ ...current, pickup: value }));
           });
 
           dropoffAutocomplete.addListener("place_changed", () => {
-            const place = dropoffAutocomplete.getPlace();
-            const value = place.formatted_address || place.name || dropoffRef.current?.value || "";
+            const place = dropoffAutocomplete?.getPlace();
+            const value = place?.formatted_address || place?.name || dropoffRef.current?.value || "";
             setTrip((current) => ({ ...current, dropoff: value }));
           });
 
+          updateGoogleMapsDebugState({
+            pickupAutocompleteAttached: true,
+            dropAutocompleteAttached: true,
+            lastErrorMessage: ""
+          });
           setMapsStatus("ready");
-        } catch {
+        } catch (error: unknown) {
+          updateGoogleMapsDebugState({
+            pickupAutocompleteAttached: false,
+            dropAutocompleteAttached: false,
+            lastErrorMessage: getGoogleMapsErrorMessage(
+              error,
+              "Google Places Autocomplete could not attach to the pickup and drop inputs."
+            )
+          });
           setMapsStatus("autocomplete-failed");
         }
       })
@@ -72,6 +104,16 @@ export function BookingSearchForm() {
 
     return () => {
       active = false;
+      if (pickupAutocomplete) {
+        window.google?.maps.event?.clearInstanceListeners(pickupAutocomplete);
+      }
+      if (dropoffAutocomplete) {
+        window.google?.maps.event?.clearInstanceListeners(dropoffAutocomplete);
+      }
+      updateGoogleMapsDebugState({
+        pickupAutocompleteAttached: false,
+        dropAutocompleteAttached: false
+      });
     };
   }, []);
 
@@ -104,6 +146,7 @@ export function BookingSearchForm() {
         <p className="mt-2 text-sm text-ink/60">
           {getAutocompleteStatusMessage(mapsStatus)}
         </p>
+        <GoogleMapsDebugPanel />
       </div>
 
       <div className="grid gap-4">
@@ -116,6 +159,7 @@ export function BookingSearchForm() {
             ref={pickupRef}
             value={trip.pickup}
             onChange={(event) => updateTrip("pickup", event.target.value)}
+            autoComplete="off"
             placeholder="Enter pickup address"
             className="h-12 w-full rounded border border-ink/10 bg-white px-4 outline-none transition focus:border-ember focus:ring-2 focus:ring-ember/20"
           />
@@ -130,6 +174,7 @@ export function BookingSearchForm() {
             ref={dropoffRef}
             value={trip.dropoff}
             onChange={(event) => updateTrip("dropoff", event.target.value)}
+            autoComplete="off"
             placeholder="Enter drop address"
             className="h-12 w-full rounded border border-ink/10 bg-white px-4 outline-none transition focus:border-ember focus:ring-2 focus:ring-ember/20"
           />

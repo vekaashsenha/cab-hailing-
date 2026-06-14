@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Route } from "lucide-react";
-import { getGoogleMapsFailureReason, loadGoogleMaps } from "@/lib/google-maps";
+import {
+  getGoogleMapsErrorMessage,
+  getGoogleMapsFailureReason,
+  loadGoogleMaps,
+  updateGoogleMapsDebugState
+} from "@/lib/google-maps";
 import type { TripDraft } from "@/lib/booking";
 
 type RouteMapProps = {
@@ -83,6 +88,9 @@ export function RouteMap({ trip }: RouteMapProps) {
         setStatus("fallback");
         setFallbackTitle(getRouteMapStatusTitle(reason));
         setMessage(getRouteMapStatusMessage(reason));
+        updateGoogleMapsDebugState({
+          lastErrorMessage: getGoogleMapsErrorMessage(error)
+        });
       });
 
     return () => {

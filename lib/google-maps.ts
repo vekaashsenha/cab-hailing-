@@ -1,5 +1,8 @@
 "use client";
 
+const GOOGLE_MAPS_SCRIPT_ID = "google-maps-script";
+const GOOGLE_MAPS_CALLBACK = "__cabGoogleMapsReady";
+
 let googleMapsPromise: Promise<typeof google> | null = null;
 let googleMapsAuthFailed = false;
 
@@ -15,6 +18,15 @@ export type GoogleMapsFailureReason =
   | "script-failed"
   | "places-unavailable";
 
+export type GoogleMapsDebugState = {
+  envKeyPresent: boolean;
+  scriptLoaded: boolean;
+  placesLibraryLoaded: boolean;
+  pickupAutocompleteAttached: boolean;
+  dropAutocompleteAttached: boolean;
+  lastErrorMessage: string;
+};
+
 export class GoogleMapsLoadError extends Error {
   constructor(
     message: string,
@@ -25,6 +37,17 @@ export class GoogleMapsLoadError extends Error {
   }
 }
 
+const listeners = new Set<(state: GoogleMapsDebugState) => void>();
+
+let debugState: GoogleMapsDebugState = {
+  envKeyPresent: false,
+  scriptLoaded: false,
+  placesLibraryLoaded: false,
+  pickupAutocompleteAttached: false,
+  dropAutocompleteAttached: false,
+  lastErrorMessage: ""
+};
+
 export function getGoogleMapsApiKey() {
   return process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? "";
 }
@@ -33,27 +56,74 @@ export function getGoogleMapsFailureReason(error: unknown): GoogleMapsFailureRea
   return error instanceof GoogleMapsLoadError ? error.reason : "script-failed";
 }
 
+export function getGoogleMapsErrorMessage(error: unknown, fallback = "Google Maps could not load.") {
+  return error instanceof Error ? error.message : fallback;
+}
+
+export function getGoogleMapsDebugState(): GoogleMapsDebugState {
+  const scriptLoaded = typeof window !== "undefined" ? Boolean(window.google?.maps) : false;
+  const placesLibraryLoaded =
+    typeof window !== "undefined" ? Boolean(window.google?.maps?.places?.Autocomplete) : false;
+
+  return {
+    ...debugState,
+    envKeyPresent: Boolean(getGoogleMapsApiKey()),
+    scriptLoaded: debugState.scriptLoaded || scriptLoaded,
+    placesLibraryLoaded: debugState.placesLibraryLoaded || placesLibraryLoaded
+  };
+}
+
+export function subscribeGoogleMapsDebug(listener: (state: GoogleMapsDebugState) => void) {
+  listeners.add(listener);
+  listener(getGoogleMapsDebugState());
+
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+export function updateGoogleMapsDebugState(patch: Partial<GoogleMapsDebugState>) {
+  debugState = {
+    ...debugState,
+    ...patch
+  };
+
+  const snapshot = getGoogleMapsDebugState();
+  listeners.forEach((listener) => listener(snapshot));
+}
+
 export async function loadGoogleMaps() {
   if (typeof window === "undefined") {
-    return Promise.reject(new GoogleMapsLoadError("Google Maps can only load in the browser.", "script-failed"));
+    throw createGoogleMapsLoadError("Google Maps can only load in the browser.", "script-failed");
   }
 
   const key = getGoogleMapsApiKey();
+  updateGoogleMapsDebugState({
+    envKeyPresent: Boolean(key),
+    lastErrorMessage: ""
+  });
 
   if (!key) {
-    return Promise.reject(new GoogleMapsLoadError("Google Maps API key is missing.", "key-missing"));
+    throw createGoogleMapsLoadError("Google Maps API key is missing.", "key-missing");
   }
 
   if (window.google?.maps) {
     return resolveLoadedGoogleMaps();
   }
 
-  if (googleMapsPromise) {
-    return googleMapsPromise;
+  if (!googleMapsPromise) {
+    googleMapsPromise = injectGoogleMapsScript(key).catch((error: unknown) => {
+      googleMapsPromise = null;
+      throw error;
+    });
   }
 
-  googleMapsPromise = new Promise<typeof google>((resolve, reject) => {
-    const existingScript = document.getElementById("google-maps-script") as HTMLScriptElement | null;
+  return googleMapsPromise;
+}
+
+function injectGoogleMapsScript(key: string) {
+  return new Promise<typeof google>((resolve, reject) => {
+    const existingScript = document.getElementById(GOOGLE_MAPS_SCRIPT_ID) as HTMLScriptElement | null;
 
     if (existingScript) {
       if (window.google?.maps || existingScript.dataset.loaded === "true") {
@@ -64,9 +134,9 @@ export async function loadGoogleMaps() {
       existingScript.addEventListener("load", () => resolveLoadedGoogleMaps().then(resolve).catch(reject), {
         once: true
       });
-      existingScript.addEventListener("error", () =>
-        reject(new GoogleMapsLoadError("Google Maps script failed to load.", "script-failed"))
-      );
+      existingScript.addEventListener("error", () => {
+        reject(createGoogleMapsLoadError("Google Maps script failed to load.", "script-failed"));
+      });
       return;
     }
 
@@ -74,48 +144,53 @@ export async function loadGoogleMaps() {
     window.gm_authFailure = () => {
       googleMapsAuthFailed = true;
       previousAuthFailure?.();
-      reject(new GoogleMapsLoadError("Google Maps script failed to load.", "script-failed"));
+      reject(
+        createGoogleMapsLoadError(
+          "Google Maps authentication failed. Check API key restrictions, billing, and enabled APIs.",
+          "script-failed"
+        )
+      );
     };
 
     const script = document.createElement("script");
-    window.__cabGoogleMapsReady = () => {
+    window[GOOGLE_MAPS_CALLBACK] = () => {
       script.dataset.loaded = "true";
+      updateGoogleMapsDebugState({ scriptLoaded: true });
       resolveLoadedGoogleMaps().then(resolve).catch(reject);
     };
+
     const params = new URLSearchParams({
       key,
       libraries: "places",
-      callback: "__cabGoogleMapsReady",
+      callback: GOOGLE_MAPS_CALLBACK,
       loading: "async"
     });
 
-    script.id = "google-maps-script";
+    script.id = GOOGLE_MAPS_SCRIPT_ID;
     script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
     script.async = true;
     script.defer = true;
-    script.onload = () => {
-      window.setTimeout(() => {
-        if (script.dataset.loaded !== "true") {
-          resolveLoadedGoogleMaps().then(resolve).catch(reject);
-        }
-      }, 0);
+    script.onerror = () => {
+      reject(createGoogleMapsLoadError("Google Maps script failed to load.", "script-failed"));
     };
-    script.onerror = () =>
-      reject(new GoogleMapsLoadError("Google Maps script failed to load.", "script-failed"));
+
     document.head.appendChild(script);
   });
-
-  return googleMapsPromise;
 }
 
 async function resolveLoadedGoogleMaps() {
   if (googleMapsAuthFailed) {
-    throw new GoogleMapsLoadError("Google Maps authentication failed.", "script-failed");
+    throw createGoogleMapsLoadError(
+      "Google Maps authentication failed. Check API key restrictions, billing, and enabled APIs.",
+      "script-failed"
+    );
   }
 
   if (!window.google?.maps) {
-    throw new GoogleMapsLoadError("Google Maps did not initialize.", "script-failed");
+    throw createGoogleMapsLoadError("Google Maps did not initialize.", "script-failed");
   }
+
+  updateGoogleMapsDebugState({ scriptLoaded: true });
 
   try {
     if (typeof window.google.maps.importLibrary === "function") {
@@ -123,12 +198,28 @@ async function resolveLoadedGoogleMaps() {
       await window.google.maps.importLibrary("places");
     }
   } catch {
-    throw new GoogleMapsLoadError("Google Maps libraries failed to load.", "places-unavailable");
+    throw createGoogleMapsLoadError("Google Maps Places library failed to load.", "places-unavailable");
   }
 
   if (!window.google.maps.places?.Autocomplete) {
-    throw new GoogleMapsLoadError("Google Places library is unavailable.", "places-unavailable");
+    throw createGoogleMapsLoadError("Google Places Autocomplete is unavailable.", "places-unavailable");
   }
 
+  updateGoogleMapsDebugState({
+    scriptLoaded: true,
+    placesLibraryLoaded: true,
+    lastErrorMessage: ""
+  });
+
   return window.google;
+}
+
+function createGoogleMapsLoadError(message: string, reason: GoogleMapsFailureReason) {
+  updateGoogleMapsDebugState({
+    scriptLoaded: typeof window !== "undefined" ? Boolean(window.google?.maps) : false,
+    placesLibraryLoaded: typeof window !== "undefined" ? Boolean(window.google?.maps?.places?.Autocomplete) : false,
+    lastErrorMessage: message
+  });
+
+  return new GoogleMapsLoadError(message, reason);
 }
