@@ -13,12 +13,14 @@ export function RouteMap({ trip }: RouteMapProps) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "fallback">("loading");
   const [message, setMessage] = useState("Loading route map...");
+  const [fallbackTitle, setFallbackTitle] = useState("Route preview unavailable");
 
   useEffect(() => {
     let active = true;
 
     if (!trip?.pickup || !trip.dropoff) {
       setStatus("fallback");
+      setFallbackTitle("Route preview unavailable");
       setMessage("Enter pickup and drop locations on the homepage to preview a route.");
       return () => {
         active = false;
@@ -66,6 +68,7 @@ export function RouteMap({ trip }: RouteMapProps) {
               setStatus("ready");
             } else {
               setStatus("fallback");
+              setFallbackTitle("Route preview unavailable");
               setMessage("We could not draw this route yet. Your trip details are saved and ride selection still works.");
             }
           }
@@ -76,8 +79,10 @@ export function RouteMap({ trip }: RouteMapProps) {
           return;
         }
 
+        const reason = getGoogleMapsFailureReason(error);
         setStatus("fallback");
-        setMessage(getRouteMapStatusMessage(getGoogleMapsFailureReason(error)));
+        setFallbackTitle(getRouteMapStatusTitle(reason));
+        setMessage(getRouteMapStatusMessage(reason));
       });
 
     return () => {
@@ -90,7 +95,7 @@ export function RouteMap({ trip }: RouteMapProps) {
       <div className="map-grid grid min-h-[320px] place-items-center rounded border border-ink/10 bg-white p-8 text-center shadow-soft">
         <div className="max-w-md">
           <Route className="mx-auto mb-4 h-10 w-10 text-ember" />
-          <h3 className="text-xl font-semibold">Route preview unavailable</h3>
+          <h3 className="text-xl font-semibold">{fallbackTitle}</h3>
           <p className="mt-3 text-sm leading-6 text-ink/70">{message}</p>
         </div>
       </div>
@@ -107,6 +112,19 @@ export function RouteMap({ trip }: RouteMapProps) {
       <div ref={mapRef} className="h-[320px] w-full" />
     </div>
   );
+}
+
+function getRouteMapStatusTitle(reason: ReturnType<typeof getGoogleMapsFailureReason>) {
+  switch (reason) {
+    case "key-missing":
+      return "Google Maps key missing";
+    case "script-failed":
+      return "Google Maps script failed";
+    case "places-unavailable":
+      return "Google Places unavailable";
+    default:
+      return "Route preview unavailable";
+  }
 }
 
 function getRouteMapStatusMessage(reason: ReturnType<typeof getGoogleMapsFailureReason>) {

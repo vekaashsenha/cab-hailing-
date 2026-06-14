@@ -57,7 +57,7 @@ export function GoogleMapPreview() {
       <div className="map-grid grid min-h-[360px] place-items-center rounded border border-ink/10 bg-white p-8 text-center shadow-soft">
         <div className="max-w-md">
           <MapPinned className="mx-auto mb-4 h-10 w-10 text-ember" />
-          <h3 className="text-xl font-semibold">Map preview unavailable</h3>
+          <h3 className="text-xl font-semibold">{getMapStatusTitle(status)}</h3>
           <p className="mt-3 text-sm leading-6 text-ink/70">{getMapStatusMessage(status)}</p>
         </div>
       </div>
@@ -74,6 +74,21 @@ export function GoogleMapPreview() {
       <div ref={mapRef} className="h-[360px] w-full" />
     </div>
   );
+}
+
+function getMapStatusTitle(status: MapStatus) {
+  switch (status) {
+    case "key-missing":
+      return "Google Maps key missing";
+    case "script-failed":
+      return "Google Maps script failed";
+    case "places-unavailable":
+      return "Google Places unavailable";
+    case "loading":
+    case "ready":
+    default:
+      return "Map preview";
+  }
 }
 
 function getMapStatusMessage(status: MapStatus) {

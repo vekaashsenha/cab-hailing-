@@ -1,4 +1,14 @@
+"use client";
+
 let googleMapsPromise: Promise<typeof google> | null = null;
+let googleMapsAuthFailed = false;
+
+declare global {
+  interface Window {
+    __cabGoogleMapsReady?: () => void;
+    gm_authFailure?: () => void;
+  }
+}
 
 export type GoogleMapsFailureReason =
   | "key-missing"
@@ -35,32 +45,47 @@ export async function loadGoogleMaps() {
   }
 
   if (window.google?.maps) {
-    if (!window.google.maps.places?.Autocomplete) {
-      return Promise.reject(new GoogleMapsLoadError("Google Places library is unavailable.", "places-unavailable"));
-    }
-
-    return Promise.resolve(window.google);
+    return resolveLoadedGoogleMaps();
   }
 
   if (googleMapsPromise) {
     return googleMapsPromise;
   }
 
-  googleMapsPromise = new Promise((resolve, reject) => {
+  googleMapsPromise = new Promise<typeof google>((resolve, reject) => {
     const existingScript = document.getElementById("google-maps-script") as HTMLScriptElement | null;
 
     if (existingScript) {
-      existingScript.addEventListener("load", () => resolveLoadedGoogleMaps(resolve, reject));
+      if (window.google?.maps || existingScript.dataset.loaded === "true") {
+        resolveLoadedGoogleMaps().then(resolve).catch(reject);
+        return;
+      }
+
+      existingScript.addEventListener("load", () => resolveLoadedGoogleMaps().then(resolve).catch(reject), {
+        once: true
+      });
       existingScript.addEventListener("error", () =>
         reject(new GoogleMapsLoadError("Google Maps script failed to load.", "script-failed"))
       );
       return;
     }
 
+    const previousAuthFailure = window.gm_authFailure;
+    window.gm_authFailure = () => {
+      googleMapsAuthFailed = true;
+      previousAuthFailure?.();
+      reject(new GoogleMapsLoadError("Google Maps script failed to load.", "script-failed"));
+    };
+
     const script = document.createElement("script");
+    window.__cabGoogleMapsReady = () => {
+      script.dataset.loaded = "true";
+      resolveLoadedGoogleMaps().then(resolve).catch(reject);
+    };
     const params = new URLSearchParams({
       key,
       libraries: "places",
+      callback: "__cabGoogleMapsReady",
       loading: "async"
     });
 
@@ -68,7 +93,13 @@ export async function loadGoogleMaps() {
     script.src = `https://maps.googleapis.com/maps/api/js?${params.toString()}`;
     script.async = true;
     script.defer = true;
-    script.onload = () => resolveLoadedGoogleMaps(resolve, reject);
+    script.onload = () => {
+      window.setTimeout(() => {
+        if (script.dataset.loaded !== "true") {
+          resolveLoadedGoogleMaps().then(resolve).catch(reject);
+        }
+      }, 0);
+    };
     script.onerror = () =>
       reject(new GoogleMapsLoadError("Google Maps script failed to load.", "script-failed"));
     document.head.appendChild(script);
@@ -77,19 +108,27 @@ export async function loadGoogleMaps() {
   return googleMapsPromise;
 }
 
-function resolveLoadedGoogleMaps(
-  resolve: (googleApi: typeof google) => void,
-  reject: (error: GoogleMapsLoadError) => void
-) {
+async function resolveLoadedGoogleMaps() {
+  if (googleMapsAuthFailed) {
+    throw new GoogleMapsLoadError("Google Maps authentication failed.", "script-failed");
+  }
+
   if (!window.google?.maps) {
-    reject(new GoogleMapsLoadError("Google Maps did not initialize.", "script-failed"));
-    return;
+    throw new GoogleMapsLoadError("Google Maps did not initialize.", "script-failed");
+  }
+
+  try {
+    if (typeof window.google.maps.importLibrary === "function") {
+      await window.google.maps.importLibrary("maps");
+      await window.google.maps.importLibrary("places");
+    }
+  } catch {
+    throw new GoogleMapsLoadError("Google Maps libraries failed to load.", "places-unavailable");
   }
 
   if (!window.google.maps.places?.Autocomplete) {
-    reject(new GoogleMapsLoadError("Google Places library is unavailable.", "places-unavailable"));
-    return;
+    throw new GoogleMapsLoadError("Google Places library is unavailable.", "places-unavailable");
   }
 
-  resolve(window.google);
+  return window.google;
 }
