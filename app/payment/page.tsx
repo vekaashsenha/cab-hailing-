@@ -32,6 +32,7 @@ export default function PaymentPage() {
   const [car, setCar] = useState<CarOption | null>(null);
   const [passenger, setPassenger] = useState<PassengerDetails | null>(null);
   const [payment, setPayment] = useState<PaymentOption>("Card");
+  const [isConfirming, setIsConfirming] = useState(false);
 
   useEffect(() => {
     setTrip(getTrip());
@@ -39,18 +40,39 @@ export default function PaymentPage() {
     setPassenger(getPassenger());
   }, []);
 
-  function payNow() {
-    if (!trip || !car || !passenger) {
+  async function payNow() {
+    if (!trip || !car || !passenger || isConfirming) {
       return;
     }
 
-    saveBooking({
+    setIsConfirming(true);
+
+    const booking = {
       bookingId: createBookingId(),
       trip,
       car,
       passenger,
       payment
-    });
+    };
+
+    saveBooking(booking);
+
+    try {
+      const response = await fetch("/api/send-booking-email", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({ booking })
+      });
+
+      if (!response.ok) {
+        console.error("Booking email notification failed.");
+      }
+    } catch (error) {
+      console.error("Booking email notification failed.", error);
+    }
+
     router.push("/confirmation");
   }
 
@@ -116,10 +138,10 @@ export default function PaymentPage() {
           <button
             type="button"
             onClick={payNow}
-            disabled={!canPay}
+            disabled={!canPay || isConfirming}
             className="mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded bg-ink px-5 font-semibold text-white transition hover:bg-ember disabled:cursor-not-allowed disabled:bg-ink/35"
           >
-            Pay Now
+            {isConfirming ? "Confirming..." : "Pay Now"}
             <ArrowRight className="h-5 w-5" />
           </button>
         </div>
