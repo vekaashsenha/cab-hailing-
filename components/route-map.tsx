@@ -131,11 +131,9 @@ export function RouteMap({ trip, onDistanceResolved }: RouteMapProps) {
 function getRouteMapStatusTitle(reason: ReturnType<typeof getGoogleMapsFailureReason>) {
   switch (reason) {
     case "key-missing":
-      return "Google Maps key missing";
     case "script-failed":
-      return "Google Maps script failed";
     case "places-unavailable":
-      return "Google Places unavailable";
+      return "Route preview unavailable";
     default:
       return "Route preview unavailable";
   }
@@ -144,12 +142,12 @@ function getRouteMapStatusTitle(reason: ReturnType<typeof getGoogleMapsFailureRe
 function getRouteMapStatusMessage(reason: ReturnType<typeof getGoogleMapsFailureReason>) {
   switch (reason) {
     case "key-missing":
-      return "Google Maps key is missing. Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to show the live route preview.";
+      return "The route preview is unavailable right now. Enter estimated KM manually to continue.";
     case "script-failed":
-      return "Google Maps script failed to load. Check network access, billing, and API key restrictions.";
+      return "The route preview could not load right now. Enter estimated KM manually to continue.";
     case "places-unavailable":
-      return "Google Places is unavailable. Make sure the Places API is enabled before drawing routes.";
+      return "Route details are unavailable right now. Enter estimated KM manually to continue.";
     default:
-      return "Google Maps could not load right now.";
+      return "The route preview could not load right now. Enter estimated KM manually to continue.";
   }
 }

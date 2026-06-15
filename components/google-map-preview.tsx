@@ -87,11 +87,9 @@ export function GoogleMapPreview() {
 function getMapStatusTitle(status: MapStatus) {
   switch (status) {
     case "key-missing":
-      return "Google Maps key missing";
     case "script-failed":
-      return "Google Maps script failed";
     case "places-unavailable":
-      return "Google Places unavailable";
+      return "Map preview unavailable";
     case "loading":
     case "ready":
     default:
@@ -102,11 +100,11 @@ function getMapStatusTitle(status: MapStatus) {
 function getMapStatusMessage(status: MapStatus) {
   switch (status) {
     case "key-missing":
-      return "Google Maps key is missing. Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to enable the map.";
+      return "The map preview is unavailable right now. You can still enter your trip details manually.";
     case "script-failed":
-      return "Google Maps script failed to load. Check network access, billing, and API key restrictions.";
+      return "The map preview could not load right now. You can still continue with your booking.";
     case "places-unavailable":
-      return "Google Places is unavailable. Make sure the Places API is enabled for this key.";
+      return "Location details are unavailable right now. You can still continue with your booking.";
     case "loading":
     case "ready":
     default:

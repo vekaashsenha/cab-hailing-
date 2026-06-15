@@ -4,7 +4,6 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CalendarDays, CarFront, Clock, LocateFixed, MapPin, Search } from "lucide-react";
 import { emptyTrip, getRideTypeLabel, getTrip, rideTypes, saveTrip, type TripDraft } from "@/lib/booking";
-import { GoogleMapsDebugPanel } from "@/components/google-maps-debug-panel";
 import {
   getGoogleMapsErrorMessage,
   getGoogleMapsFailureReason,
@@ -150,7 +149,6 @@ export function BookingSearchForm() {
         <p className="mt-2 text-sm text-ink/60">
           {getAutocompleteStatusMessage(mapsStatus)}
         </p>
-        <GoogleMapsDebugPanel />
       </div>
 
       <div className="grid gap-4">
@@ -250,15 +248,15 @@ function getAutocompleteStatusMessage(status: MapsAutocompleteStatus) {
     case "ready":
       return "Places suggestions are enabled.";
     case "key-missing":
-      return "Google Maps key is missing. Enter addresses manually until NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is configured.";
+      return "Location suggestions are unavailable right now. You can enter addresses manually.";
     case "script-failed":
-      return "Google Maps script failed to load. Enter addresses manually for now.";
+      return "Location suggestions could not load right now. You can enter addresses manually.";
     case "places-unavailable":
-      return "Google Places is unavailable. Enable the Places library and enter addresses manually for now.";
+      return "Location suggestions are unavailable right now. You can enter addresses manually.";
     case "autocomplete-failed":
-      return "Google Places Autocomplete could not attach to the pickup and drop inputs.";
+      return "Location suggestions could not connect right now. You can enter addresses manually.";
     case "loading":
     default:
-      return "Loading Google Places suggestions.";
+      return "Loading location suggestions.";
   }
 }
