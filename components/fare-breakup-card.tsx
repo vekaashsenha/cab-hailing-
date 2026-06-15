@@ -21,7 +21,7 @@ export function FareBreakupCard({ trip, car, title = "Fare breakup" }: FareBreak
   const rows = getFareBreakupRows(breakup);
   const missingMessage = !breakup.hasValidOutstationDates
     ? "Select a valid return date on the homepage to calculate the outstation fare."
-    : "Google Maps distance is not available yet. Enter estimated KM on the rides page to continue.";
+    : "Route distance is not available yet. Enter estimated KM on the rides page to continue.";
 
   return (
     <div className="rounded border border-ink/10 bg-white p-5 shadow-soft">
