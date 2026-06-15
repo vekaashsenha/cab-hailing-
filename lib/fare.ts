@@ -4,6 +4,8 @@ export type DistanceSource = "maps" | "manual" | "missing";
 
 export type FareBreakup = {
   rideType: RideType;
+  serviceType: string;
+  vehicleType: string;
   routeKm: number;
   billableKm: number;
   ratePerKm: number;
@@ -54,6 +56,8 @@ export function calculateFareBreakup(trip: TripDraft, car: CarOption): FareBreak
 
   return {
     rideType: trip.rideType,
+    serviceType: getServiceTypeLabel(trip.rideType),
+    vehicleType: car.name,
     routeKm,
     billableKm,
     ratePerKm: car.ratePerKm,
@@ -71,7 +75,15 @@ export function calculateFareBreakup(trip: TripDraft, car: CarOption): FareBreak
 export function getFareBreakupRows(breakup: FareBreakup): FareRow[] {
   const rows: FareRow[] = [
     {
-      label: "Estimated route KM",
+      label: "Service type",
+      value: breakup.serviceType
+    },
+    {
+      label: "Vehicle type",
+      value: breakup.vehicleType
+    },
+    {
+      label: "Route KM",
       value: breakup.hasDistance ? `${formatKm(breakup.routeKm)} (${formatDistanceSource(breakup.distanceSource)})` : "Needed"
     },
     {
@@ -145,10 +157,14 @@ export function roundKm(value: number) {
 
 export function getFareNote(rideType: RideType) {
   if (rideType === "Outstation") {
-    return "Toll, parking, state tax, permit, and extra charges are extra if applicable.";
+    return "Toll, parking, state tax, permit, and extra charges extra.";
   }
 
   return "Toll and parking extra.";
+}
+
+export function getServiceTypeLabel(rideType: RideType) {
+  return rideType === "Within City" ? "Hourly / Within City" : rideType;
 }
 
 export function formatDistanceSource(source: DistanceSource) {
