@@ -10,12 +10,29 @@ type SendBookingEmailRequest = {
   booking?: BookingRecord;
 };
 
+type ResendEmailResponse = {
+  id?: string;
+  message?: string;
+  error?: string | { message?: string };
+};
+
 export async function POST(request: Request) {
   const resendApiKey = process.env.RESEND_API_KEY;
   const operationsEmail = process.env.OPERATIONS_EMAIL;
 
+  console.info("Booking email config", {
+    resendApiKeyPresent: resendApiKey ? "Yes" : "No",
+    operationsEmailPresent: operationsEmail ? "Yes" : "No"
+  });
+
   if (!resendApiKey || !operationsEmail) {
-    return NextResponse.json({ error: "Booking email is not configured." }, { status: 500 });
+    console.error("Booking email skipped", {
+      error: "Missing booking email configuration."
+    });
+    return NextResponse.json(
+      { ok: false, error: "Booking email is not configured." },
+      { status: 500 }
+    );
   }
 
   let payload: SendBookingEmailRequest;
@@ -23,38 +40,64 @@ export async function POST(request: Request) {
   try {
     payload = (await request.json()) as SendBookingEmailRequest;
   } catch {
-    return NextResponse.json({ error: "Invalid booking email payload." }, { status: 400 });
+    console.error("Booking email skipped", {
+      error: "Invalid booking email payload."
+    });
+    return NextResponse.json({ ok: false, error: "Invalid booking email payload." }, { status: 400 });
   }
 
   if (!isBookingRecord(payload.booking)) {
-    return NextResponse.json({ error: "Booking details are incomplete." }, { status: 400 });
+    console.error("Booking email skipped", {
+      error: "Booking details are incomplete."
+    });
+    return NextResponse.json({ ok: false, error: "Booking details are incomplete." }, { status: 400 });
   }
 
   const booking = payload.booking;
   const rows = getBookingRows(booking);
 
-  const resendResponse = await fetch(RESEND_EMAILS_URL, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${resendApiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      from: TEST_SENDER,
-      to: [operationsEmail],
-      subject: `Completed booking ${booking.bookingId}`,
-      text: renderTextEmail(rows),
-      html: renderHtmlEmail(rows)
-    })
-  });
+  let resendResponse: Response;
 
-  if (!resendResponse.ok) {
-    const detail = await resendResponse.text().catch(() => "");
-    console.error("Resend booking email failed", resendResponse.status, detail);
-    return NextResponse.json({ error: "Booking email could not be sent." }, { status: 502 });
+  try {
+    resendResponse = await fetch(RESEND_EMAILS_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${resendApiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        from: TEST_SENDER,
+        to: [operationsEmail],
+        subject: `Completed booking ${booking.bookingId}`,
+        text: renderTextEmail(rows),
+        html: renderHtmlEmail(rows)
+      })
+    });
+  } catch (error: unknown) {
+    const message = getSafeErrorMessage(error, "Resend request could not be completed.");
+    console.error("Resend booking email failed", {
+      error: message
+    });
+    return NextResponse.json({ ok: false, error: message }, { status: 502 });
   }
 
-  return NextResponse.json({ ok: true });
+  const resendBody = await readResendResponse(resendResponse);
+  const resendId = typeof resendBody?.id === "string" ? resendBody.id : "";
+
+  if (!resendResponse.ok) {
+    const message = getResendErrorMessage(resendResponse.status, resendBody);
+    console.error("Resend booking email failed", {
+      status: resendResponse.status,
+      error: message
+    });
+    return NextResponse.json({ ok: false, error: message }, { status: 502 });
+  }
+
+  console.info("Resend booking email sent", {
+    resendResponseId: resendId || "Not provided"
+  });
+
+  return NextResponse.json({ ok: true, id: resendId });
 }
 
 function getBookingRows(booking: BookingRecord) {
@@ -158,4 +201,56 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function isNullableNumber(value: unknown) {
   return value === null || typeof value === "number";
+}
+
+async function readResendResponse(response: Response): Promise<ResendEmailResponse | null> {
+  const text = await response.text().catch(() => "");
+
+  if (!text) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(text) as ResendEmailResponse;
+  } catch {
+    return {
+      message: sanitizeMessage(text)
+    };
+  }
+}
+
+function getResendErrorMessage(status: number, body: ResendEmailResponse | null) {
+  const message =
+    body?.message ||
+    (typeof body?.error === "string" ? body.error : body?.error?.message) ||
+    "";
+
+  if (message) {
+    return sanitizeMessage(message);
+  }
+
+  if (status === 401 || status === 403) {
+    return "Email provider authorization failed.";
+  }
+
+  if (status === 422) {
+    return "Email provider rejected the message details.";
+  }
+
+  return "Email provider could not send the message.";
+}
+
+function getSafeErrorMessage(error: unknown, fallback: string) {
+  if (error instanceof Error && error.message) {
+    return sanitizeMessage(error.message);
+  }
+
+  return fallback;
+}
+
+function sanitizeMessage(message: string) {
+  return message
+    .replace(/re_[A-Za-z0-9_-]+/g, "[redacted]")
+    .replace(/Bearer\s+[A-Za-z0-9._-]+/gi, "Bearer [redacted]")
+    .slice(0, 240);
 }

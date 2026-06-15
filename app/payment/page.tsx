@@ -52,27 +52,16 @@ export default function PaymentPage() {
       trip,
       car,
       passenger,
-      payment
+      payment,
+      operationsEmailStatus: {
+        attempted: false,
+        sent: false,
+        errorReason: "Email request has not completed yet.",
+        resendId: ""
+      }
     };
 
     saveBooking(booking);
-
-    try {
-      const response = await fetch("/api/send-booking-email", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ booking })
-      });
-
-      if (!response.ok) {
-        console.error("Booking email notification failed.");
-      }
-    } catch (error) {
-      console.error("Booking email notification failed.", error);
-    }
-
     router.push("/confirmation");
   }
 

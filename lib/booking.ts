@@ -30,12 +30,20 @@ export type PassengerDetails = {
 
 export type PaymentOption = "Card" | "UPI" | "Pay Later";
 
+export type OperationsEmailStatus = {
+  attempted: boolean;
+  sent: boolean;
+  errorReason: string;
+  resendId: string;
+};
+
 export type BookingRecord = {
   bookingId: string;
   trip: TripDraft;
   car: CarOption;
   passenger: PassengerDetails;
   payment: PaymentOption;
+  operationsEmailStatus?: OperationsEmailStatus;
 };
 
 const tripKey = "cabHailing.trip";
@@ -145,7 +153,8 @@ export function saveBooking(record: BookingRecord) {
   writeJson(bookingKey, {
     ...record,
     trip: normalizeTrip(record.trip),
-    car: normalizeCar(record.car) ?? record.car
+    car: normalizeCar(record.car) ?? record.car,
+    operationsEmailStatus: normalizeOperationsEmailStatus(record.operationsEmailStatus)
   });
 }
 
@@ -159,7 +168,8 @@ export function getBooking() {
   return {
     ...booking,
     trip: normalizeTrip(booking.trip),
-    car: normalizeCar(booking.car) ?? booking.car
+    car: normalizeCar(booking.car) ?? booking.car,
+    operationsEmailStatus: normalizeOperationsEmailStatus(booking.operationsEmailStatus)
   };
 }
 
@@ -203,4 +213,21 @@ function isRideType(value: unknown): value is RideType {
 
 function normalizeNullableKm(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function normalizeOperationsEmailStatus(value: unknown): OperationsEmailStatus | undefined {
+  if (!isObject(value)) {
+    return undefined;
+  }
+
+  return {
+    attempted: value.attempted === true,
+    sent: value.sent === true,
+    errorReason: typeof value.errorReason === "string" ? value.errorReason : "",
+    resendId: typeof value.resendId === "string" ? value.resendId : ""
+  };
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }

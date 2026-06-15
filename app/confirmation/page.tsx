@@ -1,19 +1,38 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
-import { ArrowRight, CheckCircle2, PhoneCall } from "lucide-react";
+import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
+import { ArrowRight, CheckCircle2, Mail, PhoneCall } from "lucide-react";
 import { FareBreakupCard } from "@/components/fare-breakup-card";
 import { PageShell } from "@/components/page-shell";
 import { TripSummary } from "@/components/trip-summary";
-import { getBooking, type BookingRecord } from "@/lib/booking";
+import { getBooking, saveBooking, type BookingRecord, type OperationsEmailStatus } from "@/lib/booking";
 import { calculateFareBreakup, formatCurrency } from "@/lib/fare";
+
+const PENDING_EMAIL_MESSAGE = "Email request is being sent.";
+
+type SendBookingEmailResponse = {
+  ok?: boolean;
+  id?: string;
+  error?: string;
+};
 
 export default function ConfirmationPage() {
   const [booking, setBooking] = useState<BookingRecord | null>(null);
+  const emailRequestStarted = useRef(false);
 
   useEffect(() => {
-    setBooking(getBooking());
+    const storedBooking = getBooking();
+    setBooking(storedBooking);
+
+    if (
+      storedBooking &&
+      shouldSendOperationsEmail(storedBooking.operationsEmailStatus) &&
+      !emailRequestStarted.current
+    ) {
+      emailRequestStarted.current = true;
+      void sendOperationsEmail(storedBooking, setBooking);
+    }
   }, []);
 
   return (
@@ -62,6 +81,8 @@ export default function ConfirmationPage() {
               </div>
             ) : null}
 
+            <OperationsEmailStatusPanel status={booking.operationsEmailStatus} />
+
             <div className="mt-6 flex items-center gap-3 rounded bg-ink p-4 text-white">
               <PhoneCall className="h-5 w-5 flex-none text-gold" />
               <p className="text-sm text-white/80">Keep your phone reachable for driver and duty confirmation.</p>
@@ -86,6 +107,146 @@ export default function ConfirmationPage() {
       )}
     </PageShell>
   );
+}
+
+function OperationsEmailStatusPanel({ status }: { status?: OperationsEmailStatus }) {
+  const sent = status?.sent === true;
+  const attempted = status?.attempted === true;
+  const isPending = attempted && !sent && status?.errorReason === PENDING_EMAIL_MESSAGE;
+  const errorReason = status?.errorReason || "Email request was not recorded for this booking.";
+
+  return (
+    <div className="mt-6 rounded bg-mist p-4">
+      <div className="flex items-start gap-3">
+        <Mail className={`mt-0.5 h-5 w-5 flex-none ${sent ? "text-emerald-700" : "text-ember"}`} />
+        <div className="w-full">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink/50">Operations email</p>
+          <dl className="mt-3 grid gap-2 text-sm">
+            <div className="flex items-center justify-between gap-4">
+              <dt className="text-ink/60">Email request attempted</dt>
+              <dd className="font-semibold text-ink">{attempted ? "Yes" : "No"}</dd>
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <dt className="text-ink/60">Operations email sent</dt>
+              <dd className="font-semibold text-ink">{sent ? "Yes" : "No"}</dd>
+            </div>
+            {isPending ? (
+              <div className="flex items-start justify-between gap-4">
+                <dt className="text-ink/60">Status</dt>
+                <dd className="max-w-[260px] text-right font-semibold text-ink">Sending...</dd>
+              </div>
+            ) : null}
+            {!sent && !isPending ? (
+              <div className="flex items-start justify-between gap-4">
+                <dt className="text-ink/60">Safe error reason</dt>
+                <dd className="max-w-[260px] text-right font-semibold text-ink">{errorReason}</dd>
+              </div>
+            ) : null}
+          </dl>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function shouldSendOperationsEmail(status?: OperationsEmailStatus) {
+  return !status?.attempted || status.errorReason === PENDING_EMAIL_MESSAGE;
+}
+
+async function sendOperationsEmail(
+  booking: BookingRecord,
+  setBooking: Dispatch<SetStateAction<BookingRecord | null>>
+) {
+  const pendingBooking: BookingRecord = {
+    ...booking,
+    operationsEmailStatus: {
+      attempted: true,
+      sent: false,
+      errorReason: PENDING_EMAIL_MESSAGE,
+      resendId: ""
+    }
+  };
+
+  saveBooking(pendingBooking);
+  setBooking(pendingBooking);
+
+  try {
+    const response = await fetch("/api/send-booking-email", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ booking: pendingBooking })
+    });
+    const result = await readEmailResponse(response);
+    const operationsEmailStatus = getEmailStatusFromResponse(response, result);
+    const updatedBooking = {
+      ...pendingBooking,
+      operationsEmailStatus
+    };
+
+    saveBooking(updatedBooking);
+    setBooking(updatedBooking);
+  } catch (error) {
+    console.error("Booking email notification failed.", error);
+    const updatedBooking = {
+      ...pendingBooking,
+      operationsEmailStatus: {
+        attempted: true,
+        sent: false,
+        errorReason: "Email request could not be completed.",
+        resendId: ""
+      }
+    };
+
+    saveBooking(updatedBooking);
+    setBooking(updatedBooking);
+  }
+}
+
+async function readEmailResponse(response: Response): Promise<SendBookingEmailResponse | null> {
+  try {
+    return (await response.json()) as SendBookingEmailResponse;
+  } catch {
+    return null;
+  }
+}
+
+function getEmailStatusFromResponse(
+  response: Response,
+  result: SendBookingEmailResponse | null
+): OperationsEmailStatus {
+  if (response.ok && result?.ok) {
+    return {
+      attempted: true,
+      sent: true,
+      errorReason: "",
+      resendId: typeof result.id === "string" ? result.id : ""
+    };
+  }
+
+  return {
+    attempted: true,
+    sent: false,
+    errorReason: getSafeEmailErrorReason(response.status, result?.error),
+    resendId: ""
+  };
+}
+
+function getSafeEmailErrorReason(status: number, error?: string) {
+  if (error) {
+    return error;
+  }
+
+  if (status === 500) {
+    return "Booking email is not configured.";
+  }
+
+  if (status === 502) {
+    return "Email provider rejected the message.";
+  }
+
+  return "Email request failed.";
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
