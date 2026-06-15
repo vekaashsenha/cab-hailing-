@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CalendarDays, CarFront, Clock, LocateFixed, MapPin, Search } from "lucide-react";
-import { emptyTrip, getTrip, rideTypes, saveTrip, type TripDraft } from "@/lib/booking";
+import { emptyTrip, getRideTypeLabel, getTrip, rideTypes, saveTrip, type TripDraft } from "@/lib/booking";
 import { GoogleMapsDebugPanel } from "@/components/google-maps-debug-panel";
 import {
   getGoogleMapsErrorMessage,
@@ -11,8 +11,6 @@ import {
   loadGoogleMaps,
   updateGoogleMapsDebugState
 } from "@/lib/google-maps";
-
-const showMapsDebugPanel = process.env.NODE_ENV !== "production";
 
 type MapsAutocompleteStatus =
   | "loading"
@@ -135,7 +133,11 @@ export function BookingSearchForm() {
     saveTrip({
       ...trip,
       pickup: trip.pickup.trim(),
-      dropoff: trip.dropoff.trim()
+      dropoff: trip.dropoff.trim(),
+      routeKm: null,
+      manualKm: null,
+      travelDays: 1,
+      travelNights: 0
     });
     router.push("/rides");
   }
@@ -148,7 +150,7 @@ export function BookingSearchForm() {
         <p className="mt-2 text-sm text-ink/60">
           {getAutocompleteStatusMessage(mapsStatus)}
         </p>
-        {showMapsDebugPanel ? <GoogleMapsDebugPanel /> : null}
+        <GoogleMapsDebugPanel />
       </div>
 
       <div className="grid gap-4">
@@ -221,7 +223,9 @@ export function BookingSearchForm() {
             className="h-12 w-full rounded border border-ink/10 bg-white px-4 outline-none transition focus:border-ember focus:ring-2 focus:ring-ember/20"
           >
             {rideTypes.map((type) => (
-              <option key={type}>{type}</option>
+              <option key={type} value={type}>
+                {getRideTypeLabel(type)}
+              </option>
             ))}
           </select>
         </label>

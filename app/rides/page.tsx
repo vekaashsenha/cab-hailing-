@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Briefcase, CarFront, UsersRound } from "lucide-react";
 import { PageShell } from "@/components/page-shell";
@@ -9,25 +9,63 @@ import { RouteMap } from "@/components/route-map";
 import { TripSummary } from "@/components/trip-summary";
 import {
   carOptions,
-  fareForRide,
-  formatFare,
   getTrip,
+  saveTrip,
   saveSelectedCar,
   type CarOption,
   type TripDraft
 } from "@/lib/booking";
+import { calculateFareBreakup, formatCurrency, formatKm, getFareBreakupRows, getFareRouteKm, roundKm } from "@/lib/fare";
 
 export default function RidesPage() {
   const router = useRouter();
   const [trip, setTrip] = useState<TripDraft | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [message, setMessage] = useState("");
 
   useEffect(() => {
     setTrip(getTrip());
     setLoaded(true);
   }, []);
 
+  const updateTrip = useCallback((patch: Partial<TripDraft>) => {
+    setTrip((current) => {
+      if (!current) {
+        return current;
+      }
+
+      const next = { ...current, ...patch };
+      const unchanged = Object.entries(patch).every(([key, value]) => current[key as keyof TripDraft] === value);
+
+      if (unchanged) {
+        return current;
+      }
+
+      saveTrip(next);
+      return next;
+    });
+  }, []);
+
+  const handleDistanceResolved = useCallback(
+    (routeKm: number) => {
+      updateTrip({ routeKm: roundKm(routeKm) });
+    },
+    [updateTrip]
+  );
+
   function selectCar(car: CarOption) {
+    if (!trip) {
+      return;
+    }
+
+    const breakup = calculateFareBreakup(trip, car);
+
+    if (!breakup.hasDistance) {
+      setMessage("Enter estimated KM to calculate the fare before selecting a vehicle.");
+      return;
+    }
+
+    setMessage("");
     saveSelectedCar(car);
     router.push("/booking");
   }
@@ -41,6 +79,7 @@ export default function RidesPage() {
       <div className="grid gap-8 lg:grid-cols-[360px_1fr]">
         <aside className="space-y-6">
           <TripSummary trip={trip} />
+          <TripDistanceControls trip={trip} onChange={updateTrip} />
           {!trip && loaded ? (
             <Link
               href="/"
@@ -53,11 +92,14 @@ export default function RidesPage() {
         </aside>
 
         <div className="space-y-8">
-          <RouteMap trip={trip} />
+          <RouteMap trip={trip} onDistanceResolved={handleDistanceResolved} />
+
+          {message ? <p className="rounded bg-ember/10 px-4 py-3 text-sm text-ember">{message}</p> : null}
 
           <div className="grid gap-5 md:grid-cols-2">
             {carOptions.map((car) => {
-              const fare = trip ? fareForRide(car, trip.rideType) : car.fare;
+              const breakup = trip ? calculateFareBreakup(trip, car) : null;
+              const rows = breakup ? getFareBreakupRows(breakup) : [];
 
               return (
                 <article key={car.id} className="overflow-hidden rounded border border-ink/10 bg-white shadow-soft">
@@ -67,11 +109,13 @@ export default function RidesPage() {
                     <div className="mt-2 flex items-start justify-between gap-4">
                       <div>
                         <h2 className="text-2xl font-semibold">{car.name}</h2>
-                        <p className="mt-1 text-sm text-ink/60">Estimated fare</p>
+                        <p className="mt-1 text-sm text-ink/60">{formatCurrency(car.ratePerKm)} / KM</p>
                       </div>
                       <CarFront className="h-7 w-7 text-gold" />
                     </div>
-                    <p className="mt-2 text-3xl font-semibold">{formatFare(fare)}</p>
+                    <p className="mt-2 text-3xl font-semibold">
+                      {breakup?.hasDistance ? formatCurrency(breakup.totalFare) : "--"}
+                    </p>
                     <div className="mt-5 grid grid-cols-2 gap-3 text-sm text-ink/70">
                       <span className="flex items-center gap-2 rounded bg-mist px-3 py-2">
                         <UsersRound className="h-4 w-4 text-ember" />
@@ -82,10 +126,22 @@ export default function RidesPage() {
                         {car.luggage} luggage
                       </span>
                     </div>
+                    {breakup ? (
+                      <dl className="mt-5 grid gap-2 text-sm">
+                        {rows.map((row) => (
+                          <div key={row.label} className="flex items-start justify-between gap-4 rounded bg-mist px-3 py-2">
+                            <dt className="text-ink/60">{row.label}</dt>
+                            <dd className={`text-right ${row.emphasis ? "font-semibold text-ink" : "text-ink/80"}`}>
+                              {row.value}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => selectCar(car)}
-                      disabled={!trip}
+                      disabled={!trip || !breakup?.hasDistance}
                       className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded bg-ink px-5 font-semibold text-white transition hover:bg-ember disabled:cursor-not-allowed disabled:bg-ink/35"
                     >
                       Select
@@ -99,5 +155,89 @@ export default function RidesPage() {
         </div>
       </div>
     </PageShell>
+  );
+}
+
+function TripDistanceControls({
+  trip,
+  onChange
+}: {
+  trip: TripDraft | null;
+  onChange: (patch: Partial<TripDraft>) => void;
+}) {
+  if (!trip) {
+    return null;
+  }
+
+  const routeKm = getFareRouteKm(trip);
+
+  function updateManualKm(value: string) {
+    const nextValue = Number(value);
+    onChange({ manualKm: Number.isFinite(nextValue) && nextValue > 0 ? nextValue : null });
+  }
+
+  function updateTravelDays(value: string) {
+    const nextValue = Number(value);
+    onChange({ travelDays: Number.isFinite(nextValue) ? Math.max(1, Math.round(nextValue)) : 1 });
+  }
+
+  function updateTravelNights(value: string) {
+    const nextValue = Number(value);
+    onChange({ travelNights: Number.isFinite(nextValue) ? Math.max(0, Math.round(nextValue)) : 0 });
+  }
+
+  return (
+    <div className="rounded border border-ink/10 bg-white p-6 shadow-soft">
+      <p className="text-sm font-semibold uppercase tracking-[0.16em] text-ember">Distance and billing</p>
+      <div className="mt-4 space-y-4">
+        <div className="rounded bg-mist p-4 text-sm">
+          <p className="text-ink/60">Estimated route KM</p>
+          <p className="mt-1 text-lg font-semibold">{routeKm > 0 ? formatKm(routeKm) : "Not available yet"}</p>
+          <p className="mt-1 text-ink/60">
+            {trip.routeKm ? "Using Google Maps route distance." : "Enter estimated KM below if Maps is unavailable."}
+          </p>
+        </div>
+
+        <label className="block">
+          <span className="mb-2 block text-sm font-semibold">Manual estimated KM</span>
+          <input
+            type="number"
+            min="1"
+            step="0.1"
+            value={trip.manualKm ?? ""}
+            onChange={(event) => updateManualKm(event.target.value)}
+            placeholder="Enter estimated KM"
+            className="h-12 w-full rounded border border-ink/10 px-4 outline-none transition focus:border-ember focus:ring-2 focus:ring-ember/20"
+          />
+        </label>
+
+        {trip.rideType === "Outstation" ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold">Travel days</span>
+              <input
+                type="number"
+                min="1"
+                step="1"
+                value={trip.travelDays}
+                onChange={(event) => updateTravelDays(event.target.value)}
+                className="h-12 w-full rounded border border-ink/10 px-4 outline-none transition focus:border-ember focus:ring-2 focus:ring-ember/20"
+              />
+            </label>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold">Nights</span>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={trip.travelNights}
+                onChange={(event) => updateTravelNights(event.target.value)}
+                className="h-12 w-full rounded border border-ink/10 px-4 outline-none transition focus:border-ember focus:ring-2 focus:ring-ember/20"
+              />
+            </label>
+          </div>
+        ) : null}
+      </div>
+    </div>
   );
 }

@@ -12,9 +12,10 @@ import type { TripDraft } from "@/lib/booking";
 
 type RouteMapProps = {
   trip: TripDraft | null;
+  onDistanceResolved?: (routeKm: number) => void;
 };
 
-export function RouteMap({ trip }: RouteMapProps) {
+export function RouteMap({ trip, onDistanceResolved }: RouteMapProps) {
   const mapRef = useRef<HTMLDivElement | null>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "fallback">("loading");
   const [message, setMessage] = useState("Loading route map...");
@@ -70,6 +71,11 @@ export function RouteMap({ trip }: RouteMapProps) {
 
             if (routeStatus === googleApi.maps.DirectionsStatus.OK && result) {
               directionsRenderer.setDirections(result);
+              const routeMeters =
+                result.routes[0]?.legs.reduce((total, leg) => total + (leg.distance?.value ?? 0), 0) ?? 0;
+              if (routeMeters > 0) {
+                onDistanceResolved?.(routeMeters / 1000);
+              }
               setStatus("ready");
             } else {
               setStatus("fallback");
@@ -96,7 +102,7 @@ export function RouteMap({ trip }: RouteMapProps) {
     return () => {
       active = false;
     };
-  }, [trip]);
+  }, [onDistanceResolved, trip]);
 
   if (status === "fallback") {
     return (

@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { CalendarDays, Clock, MapPin, Route } from "lucide-react";
-import type { CarOption, TripDraft } from "@/lib/booking";
-import { fareForRide, formatFare } from "@/lib/booking";
+import { getRideTypeLabel, type CarOption, type TripDraft } from "@/lib/booking";
+import { formatDistanceSource, formatKm, getFareRouteKm, getTripDistanceSource } from "@/lib/fare";
 
 type TripSummaryProps = {
   trip: TripDraft | null;
@@ -20,6 +20,9 @@ export function TripSummary({ trip, car }: TripSummaryProps) {
     );
   }
 
+  const routeKm = getFareRouteKm(trip);
+  const distanceSource = getTripDistanceSource(trip);
+
   return (
     <div className="rounded border border-ink/10 bg-white p-6 shadow-soft">
       <p className="text-sm font-semibold uppercase tracking-[0.16em] text-ember">Trip summary</p>
@@ -29,14 +32,21 @@ export function TripSummary({ trip, car }: TripSummaryProps) {
         <SummaryRow icon={<CalendarDays className="h-5 w-5" />} label="Date" value={trip.date} />
         <SummaryRow icon={<Clock className="h-5 w-5" />} label="Time" value={trip.time} />
         <div className="rounded bg-mist p-4">
-          <p className="font-semibold">{trip.rideType}</p>
+          <p className="font-semibold">{getRideTypeLabel(trip.rideType)}</p>
           {car ? (
-            <p className="mt-1 text-ink/70">
-              {car.name} selected - {formatFare(fareForRide(car, trip.rideType))}
-            </p>
+            <p className="mt-1 text-ink/70">{car.name} selected</p>
           ) : (
             <p className="mt-1 text-ink/70">Select a vehicle to continue.</p>
           )}
+          <p className="mt-2 text-ink/70">
+            Distance: {routeKm > 0 ? `${formatKm(routeKm)} (${formatDistanceSource(distanceSource)})` : "Awaiting route or manual KM"}
+          </p>
+          {trip.rideType === "Outstation" ? (
+            <p className="mt-1 text-ink/70">
+              {trip.travelDays} day{trip.travelDays === 1 ? "" : "s"} / {trip.travelNights} night
+              {trip.travelNights === 1 ? "" : "s"}
+            </p>
+          ) : null}
         </div>
       </div>
     </div>

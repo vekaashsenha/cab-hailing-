@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { fareForRide, formatFare, type BookingRecord, type PaymentOption } from "@/lib/booking";
+import { getRideTypeLabel, type BookingRecord, type PaymentOption } from "@/lib/booking";
+import { calculateFareBreakup, getFareBreakupRows } from "@/lib/fare";
 
 const RESEND_EMAILS_URL = "https://api.resend.com/emails";
 const TEST_SENDER = "onboarding@resend.dev";
@@ -57,6 +58,8 @@ export async function POST(request: Request) {
 }
 
 function getBookingRows(booking: BookingRecord) {
+  const fareRows = getFareBreakupRows(calculateFareBreakup(booking.trip, booking.car));
+
   return [
     ["Booking ID", booking.bookingId],
     ["Passenger", booking.passenger.fullName],
@@ -66,10 +69,10 @@ function getBookingRows(booking: BookingRecord) {
     ["Drop", booking.trip.dropoff],
     ["Date", booking.trip.date],
     ["Time", booking.trip.time],
-    ["Ride type", booking.trip.rideType],
+    ["Ride type", getRideTypeLabel(booking.trip.rideType)],
     ["Vehicle", booking.car.name],
     ["Payment option", booking.payment],
-    ["Estimated fare", formatFare(fareForRide(booking.car, booking.trip.rideType))],
+    ...fareRows.map((row) => [row.label, row.value] as const),
     ["Special instruction", booking.passenger.instruction || "None"]
   ] as const;
 }
@@ -127,12 +130,16 @@ function isBookingRecord(value: unknown): value is BookingRecord {
     typeof trip.date === "string" &&
     typeof trip.time === "string" &&
     (trip.rideType === "Airport Transfer" || trip.rideType === "Within City" || trip.rideType === "Outstation") &&
+    isNullableNumber(trip.routeKm) &&
+    isNullableNumber(trip.manualKm) &&
+    typeof trip.travelDays === "number" &&
+    typeof trip.travelNights === "number" &&
     isObject(car) &&
     typeof car.id === "string" &&
     typeof car.name === "string" &&
     typeof car.seats === "number" &&
     typeof car.luggage === "number" &&
-    typeof car.fare === "number" &&
+    typeof car.ratePerKm === "number" &&
     typeof car.image === "string" &&
     typeof car.tone === "string" &&
     isObject(passenger) &&
@@ -147,4 +154,8 @@ function isBookingRecord(value: unknown): value is BookingRecord {
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+function isNullableNumber(value: unknown) {
+  return value === null || typeof value === "number";
 }

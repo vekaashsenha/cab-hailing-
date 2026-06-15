@@ -6,6 +6,10 @@ export type TripDraft = {
   date: string;
   time: string;
   rideType: RideType;
+  routeKm: number | null;
+  manualKm: number | null;
+  travelDays: number;
+  travelNights: number;
 };
 
 export type CarOption = {
@@ -13,7 +17,7 @@ export type CarOption = {
   name: string;
   seats: number;
   luggage: number;
-  fare: number;
+  ratePerKm: number;
   image: string;
   tone: string;
 };
@@ -42,42 +46,37 @@ const bookingKey = "cabHailing.booking";
 
 export const rideTypes: RideType[] = ["Airport Transfer", "Within City", "Outstation"];
 
+export function getRideTypeLabel(rideType: RideType) {
+  return rideType === "Within City" ? "Hourly / Within City" : rideType;
+}
+
 export const carOptions: CarOption[] = [
   {
     id: "sedan",
     name: "Sedan",
     seats: 4,
     luggage: 2,
-    fare: 950,
+    ratePerKm: 30,
     image: "https://images.unsplash.com/photo-1553440569-bcc63803a83d?auto=format&fit=crop&w=900&q=80",
-    tone: "Executive city comfort"
+    tone: "Reliable city and airport comfort"
   },
   {
-    id: "suv",
-    name: "SUV",
+    id: "mpv-suv",
+    name: "MPV / SUV",
     seats: 6,
     luggage: 4,
-    fare: 1450,
+    ratePerKm: 40,
     image: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=900&q=80",
-    tone: "Family and luggage friendly"
+    tone: "Family, group, and luggage friendly"
   },
   {
-    id: "premium-suv",
-    name: "Premium SUV",
-    seats: 6,
-    luggage: 5,
-    fare: 2200,
-    image: "https://images.unsplash.com/photo-1542362567-b07e54358753?auto=format&fit=crop&w=900&q=80",
-    tone: "Elevated business travel"
-  },
-  {
-    id: "luxury",
-    name: "Luxury",
+    id: "luxury-sedan",
+    name: "Luxury Sedan",
     seats: 4,
     luggage: 3,
-    fare: 3600,
-    image: "https://images.unsplash.com/photo-1503376780353-7e6692767b70?auto=format&fit=crop&w=900&q=80",
-    tone: "Flagship chauffeur cabin"
+    ratePerKm: 60,
+    image: "https://images.unsplash.com/photo-1542362567-b07e54358753?auto=format&fit=crop&w=900&q=80",
+    tone: "Mercedes, Audi, and executive class"
   }
 ];
 
@@ -86,7 +85,11 @@ export const emptyTrip: TripDraft = {
   dropoff: "",
   date: "",
   time: "",
-  rideType: "Airport Transfer"
+  rideType: "Airport Transfer",
+  routeKm: null,
+  manualKm: null,
+  travelDays: 1,
+  travelNights: 0
 };
 
 function canUseStorage() {
@@ -115,15 +118,17 @@ function writeJson<T>(key: string, value: T) {
 }
 
 export function getTrip() {
-  return readJson<TripDraft>(tripKey);
+  const trip = readJson<Partial<TripDraft>>(tripKey);
+  return trip ? normalizeTrip(trip) : null;
 }
 
 export function saveTrip(trip: TripDraft) {
-  writeJson(tripKey, trip);
+  writeJson(tripKey, normalizeTrip(trip));
 }
 
 export function getSelectedCar() {
-  return readJson<CarOption>(carKey);
+  const car = readJson<Partial<CarOption>>(carKey);
+  return normalizeCar(car);
 }
 
 export function saveSelectedCar(car: CarOption) {
@@ -139,11 +144,25 @@ export function savePassenger(passenger: PassengerDetails) {
 }
 
 export function saveBooking(record: BookingRecord) {
-  writeJson(bookingKey, record);
+  writeJson(bookingKey, {
+    ...record,
+    trip: normalizeTrip(record.trip),
+    car: normalizeCar(record.car) ?? record.car
+  });
 }
 
 export function getBooking() {
-  return readJson<BookingRecord>(bookingKey);
+  const booking = readJson<BookingRecord>(bookingKey);
+
+  if (!booking) {
+    return null;
+  }
+
+  return {
+    ...booking,
+    trip: normalizeTrip(booking.trip),
+    car: normalizeCar(booking.car) ?? booking.car
+  };
 }
 
 export function createBookingId() {
@@ -152,15 +171,47 @@ export function createBookingId() {
   return `CBH-${stamp}-${suffix}`;
 }
 
-export function formatFare(amount: number) {
-  return new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency: "INR",
-    maximumFractionDigits: 0
-  }).format(amount);
+function normalizeTrip(trip: Partial<TripDraft>): TripDraft {
+  return {
+    pickup: typeof trip.pickup === "string" ? trip.pickup : "",
+    dropoff: typeof trip.dropoff === "string" ? trip.dropoff : "",
+    date: typeof trip.date === "string" ? trip.date : "",
+    time: typeof trip.time === "string" ? trip.time : "",
+    rideType: isRideType(trip.rideType) ? trip.rideType : "Airport Transfer",
+    routeKm: normalizeNullableKm(trip.routeKm),
+    manualKm: normalizeNullableKm(trip.manualKm),
+    travelDays: normalizePositiveInteger(trip.travelDays, 1),
+    travelNights: normalizeNonNegativeInteger(trip.travelNights, 0)
+  };
 }
 
-export function fareForRide(car: CarOption, rideType: RideType) {
-  const multiplier = rideType === "Airport Transfer" ? 1 : rideType === "Within City" ? 1.15 : 1.75;
-  return Math.round(car.fare * multiplier);
+function normalizeCar(car: Partial<CarOption> | null) {
+  if (!car?.id) {
+    return null;
+  }
+
+  const legacyIdMap: Record<string, string> = {
+    suv: "mpv-suv",
+    "premium-suv": "mpv-suv",
+    luxury: "luxury-sedan"
+  };
+  const id = legacyIdMap[car.id] ?? car.id;
+
+  return carOptions.find((option) => option.id === id) ?? null;
+}
+
+function isRideType(value: unknown): value is RideType {
+  return value === "Airport Transfer" || value === "Within City" || value === "Outstation";
+}
+
+function normalizeNullableKm(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
+}
+
+function normalizePositiveInteger(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(1, Math.round(value)) : fallback;
+}
+
+function normalizeNonNegativeInteger(value: unknown, fallback: number) {
+  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.round(value)) : fallback;
 }

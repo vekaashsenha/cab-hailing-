@@ -1,5 +1,6 @@
 import { Briefcase, UsersRound } from "lucide-react";
-import { carOptions, formatFare } from "@/lib/booking";
+import { carOptions } from "@/lib/booking";
+import { formatCurrency } from "@/lib/fare";
 
 export function FleetPreview() {
   return (
@@ -17,7 +18,7 @@ export function FleetPreview() {
           </p>
         </div>
 
-        <div className="grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-5 md:grid-cols-3">
           {carOptions.map((car) => (
             <article key={car.id} className="overflow-hidden rounded border border-ink/10 bg-white shadow-soft">
               <img src={car.image} alt={`${car.name} cab`} className="h-44 w-full object-cover" />
@@ -34,8 +35,8 @@ export function FleetPreview() {
                     {car.luggage} bags
                   </span>
                 </div>
-                <p className="mt-4 text-sm text-ink/60">Starting from</p>
-                <p className="text-2xl font-semibold">{formatFare(car.fare)}</p>
+                <p className="mt-4 text-sm text-ink/60">Rate per KM</p>
+                <p className="text-2xl font-semibold">{formatCurrency(car.ratePerKm)} / KM</p>
               </div>
             </article>
           ))}

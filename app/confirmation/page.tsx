@@ -3,9 +3,11 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { ArrowRight, CheckCircle2, PhoneCall } from "lucide-react";
+import { FareBreakupCard } from "@/components/fare-breakup-card";
 import { PageShell } from "@/components/page-shell";
 import { TripSummary } from "@/components/trip-summary";
-import { fareForRide, formatFare, getBooking, type BookingRecord } from "@/lib/booking";
+import { getBooking, type BookingRecord } from "@/lib/booking";
+import { calculateFareBreakup, formatCurrency } from "@/lib/fare";
 
 export default function ConfirmationPage() {
   const [booking, setBooking] = useState<BookingRecord | null>(null);
@@ -22,7 +24,10 @@ export default function ConfirmationPage() {
     >
       {booking ? (
         <div className="grid gap-8 lg:grid-cols-[360px_1fr]">
-          <TripSummary trip={booking.trip} car={booking.car} />
+          <aside className="space-y-6">
+            <TripSummary trip={booking.trip} car={booking.car} />
+            <FareBreakupCard trip={booking.trip} car={booking.car} />
+          </aside>
 
           <div className="rounded border border-ink/10 bg-white p-6 shadow-soft">
             <div className="flex items-start gap-4">
@@ -44,7 +49,10 @@ export default function ConfirmationPage() {
               <Detail label="Email" value={booking.passenger.email} />
               <Detail label="Vehicle" value={booking.car.name} />
               <Detail label="Payment option" value={booking.payment} />
-              <Detail label="Estimated fare" value={formatFare(fareForRide(booking.car, booking.trip.rideType))} />
+              <Detail
+                label="Total estimated fare"
+                value={formatCurrency(calculateFareBreakup(booking.trip, booking.car).totalFare)}
+              />
             </div>
 
             {booking.passenger.instruction ? (

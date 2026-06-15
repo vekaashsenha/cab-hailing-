@@ -4,12 +4,11 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Clock3, CreditCard, Landmark, Smartphone } from "lucide-react";
+import { FareBreakupCard } from "@/components/fare-breakup-card";
 import { PageShell } from "@/components/page-shell";
 import { TripSummary } from "@/components/trip-summary";
 import {
   createBookingId,
-  fareForRide,
-  formatFare,
   getPassenger,
   getSelectedCar,
   getTrip,
@@ -19,6 +18,7 @@ import {
   type PaymentOption,
   type TripDraft
 } from "@/lib/booking";
+import { calculateFareBreakup, formatCurrency } from "@/lib/fare";
 
 const paymentOptions: Array<{ label: PaymentOption; icon: typeof CreditCard; copy: string }> = [
   { label: "Card", icon: CreditCard, copy: "Dummy card payment" },
@@ -41,7 +41,7 @@ export default function PaymentPage() {
   }, []);
 
   async function payNow() {
-    if (!trip || !car || !passenger || isConfirming) {
+    if (!trip || !car || !passenger || isConfirming || !calculateFareBreakup(trip, car).hasDistance) {
       return;
     }
 
@@ -76,8 +76,8 @@ export default function PaymentPage() {
     router.push("/confirmation");
   }
 
-  const canPay = Boolean(trip && car && passenger);
-  const amount = trip && car ? fareForRide(car, trip.rideType) : 0;
+  const amount = trip && car ? calculateFareBreakup(trip, car).totalFare : 0;
+  const canPay = Boolean(trip && car && passenger && amount > 0);
 
   return (
     <PageShell
@@ -88,6 +88,7 @@ export default function PaymentPage() {
       <div className="grid gap-8 lg:grid-cols-[360px_1fr]">
         <aside className="space-y-6">
           <TripSummary trip={trip} car={car} />
+          <FareBreakupCard trip={trip} car={car} />
           {!canPay ? (
             <Link
               href="/booking"
@@ -103,7 +104,7 @@ export default function PaymentPage() {
           <div className="mb-6 flex flex-col gap-3 border-b border-ink/10 pb-6 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm text-ink/60">Amount payable</p>
-              <p className="text-4xl font-semibold">{amount ? formatFare(amount) : "--"}</p>
+              <p className="text-4xl font-semibold">{amount ? formatCurrency(amount) : "--"}</p>
             </div>
             <div className="flex items-center gap-2 rounded bg-mist px-4 py-3 text-sm font-semibold text-ink/70">
               <Landmark className="h-5 w-5 text-ember" />

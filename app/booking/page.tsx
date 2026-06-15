@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Mail, MessageSquareText, Phone, UserRound } from "lucide-react";
+import { FareBreakupCard } from "@/components/fare-breakup-card";
 import { PageShell } from "@/components/page-shell";
 import { TripSummary } from "@/components/trip-summary";
 import {
@@ -15,6 +16,7 @@ import {
   type PassengerDetails,
   type TripDraft
 } from "@/lib/booking";
+import { calculateFareBreakup } from "@/lib/fare";
 
 const emptyPassenger: PassengerDetails = {
   fullName: "",
@@ -58,7 +60,7 @@ export default function BookingPage() {
     router.push("/payment");
   }
 
-  const canContinue = Boolean(trip && car);
+  const canContinue = Boolean(trip && car && calculateFareBreakup(trip, car).hasDistance);
 
   return (
     <PageShell
@@ -69,6 +71,7 @@ export default function BookingPage() {
       <div className="grid gap-8 lg:grid-cols-[360px_1fr]">
         <aside className="space-y-6">
           <TripSummary trip={trip} car={car} />
+          <FareBreakupCard trip={trip} car={car} />
           {!canContinue ? (
             <Link
               href={trip ? "/rides" : "/"}
