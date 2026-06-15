@@ -4,12 +4,11 @@ export type TripDraft = {
   pickup: string;
   dropoff: string;
   date: string;
+  returnDate: string;
   time: string;
   rideType: RideType;
   routeKm: number | null;
   manualKm: number | null;
-  travelDays: number;
-  travelNights: number;
 };
 
 export type CarOption = {
@@ -84,12 +83,11 @@ export const emptyTrip: TripDraft = {
   pickup: "",
   dropoff: "",
   date: "",
+  returnDate: "",
   time: "",
   rideType: "Airport Transfer",
   routeKm: null,
-  manualKm: null,
-  travelDays: 1,
-  travelNights: 0
+  manualKm: null
 };
 
 function canUseStorage() {
@@ -176,12 +174,11 @@ function normalizeTrip(trip: Partial<TripDraft>): TripDraft {
     pickup: typeof trip.pickup === "string" ? trip.pickup : "",
     dropoff: typeof trip.dropoff === "string" ? trip.dropoff : "",
     date: typeof trip.date === "string" ? trip.date : "",
+    returnDate: typeof trip.returnDate === "string" ? trip.returnDate : "",
     time: typeof trip.time === "string" ? trip.time : "",
     rideType: isRideType(trip.rideType) ? trip.rideType : "Airport Transfer",
     routeKm: normalizeNullableKm(trip.routeKm),
-    manualKm: normalizeNullableKm(trip.manualKm),
-    travelDays: normalizePositiveInteger(trip.travelDays, 1),
-    travelNights: normalizeNonNegativeInteger(trip.travelNights, 0)
+    manualKm: normalizeNullableKm(trip.manualKm)
   };
 }
 
@@ -206,12 +203,4 @@ function isRideType(value: unknown): value is RideType {
 
 function normalizeNullableKm(value: unknown) {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : null;
-}
-
-function normalizePositiveInteger(value: unknown, fallback: number) {
-  return typeof value === "number" && Number.isFinite(value) ? Math.max(1, Math.round(value)) : fallback;
-}
-
-function normalizeNonNegativeInteger(value: unknown, fallback: number) {
-  return typeof value === "number" && Number.isFinite(value) ? Math.max(0, Math.round(value)) : fallback;
 }

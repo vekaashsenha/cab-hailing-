@@ -8,14 +8,18 @@ export type FareBreakup = {
   vehicleType: string;
   routeKm: number;
   billableKm: number;
+  minimumKm: number;
   ratePerKm: number;
   baseFare: number;
   driverBata: number;
+  nightCharge: number;
   totalFare: number;
-  travelDays: number;
-  travelNights: number;
+  calendarDays: number;
+  nights: number;
   distanceSource: DistanceSource;
   hasDistance: boolean;
+  hasValidOutstationDates: boolean;
+  canCalculateFare: boolean;
   note: string;
 };
 
@@ -29,30 +33,38 @@ const WITHIN_CITY_BUFFER_KM = 15;
 const OUTSTATION_MINIMUM_KM_PER_DAY = 250;
 const DRIVER_BATA_PER_DAY = 500;
 const DRIVER_BATA_PER_NIGHT = 300;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 export function calculateFareBreakup(trip: TripDraft, car: CarOption): FareBreakup {
   const routeKm = getFareRouteKm(trip);
   const distanceSource = getDistanceSource(trip);
-  const travelDays = Math.max(1, Math.round(trip.travelDays || 1));
-  const travelNights = Math.max(0, Math.round(trip.travelNights || 0));
+  const calendarDays = trip.rideType === "Outstation" ? getOutstationCalendarDays(trip) : 0;
+  const nights = trip.rideType === "Outstation" ? getOutstationNights(trip) : 0;
+  const minimumKm = trip.rideType === "Outstation" && calendarDays > 0
+    ? OUTSTATION_MINIMUM_KM_PER_DAY * calendarDays
+    : 0;
   const hasDistance = routeKm > 0;
+  const hasValidOutstationDates = trip.rideType !== "Outstation" || calendarDays > 0;
+  const canCalculateFare = hasDistance && hasValidOutstationDates;
 
   let billableKm = 0;
   let driverBata = 0;
+  let nightCharge = 0;
 
-  if (hasDistance) {
+  if (canCalculateFare) {
     if (trip.rideType === "Within City") {
       billableKm = roundKm(routeKm + WITHIN_CITY_BUFFER_KM);
     } else if (trip.rideType === "Outstation") {
-      billableKm = roundKm(Math.max(routeKm, OUTSTATION_MINIMUM_KM_PER_DAY * travelDays));
-      driverBata = DRIVER_BATA_PER_DAY * travelDays + DRIVER_BATA_PER_NIGHT * travelNights;
+      billableKm = roundKm(Math.max(routeKm, minimumKm));
+      driverBata = DRIVER_BATA_PER_DAY * calendarDays;
+      nightCharge = DRIVER_BATA_PER_NIGHT * nights;
     } else {
       billableKm = routeKm;
     }
   }
 
   const baseFare = Math.round(billableKm * car.ratePerKm);
-  const totalFare = baseFare + driverBata;
+  const totalFare = baseFare + driverBata + nightCharge;
 
   return {
     rideType: trip.rideType,
@@ -60,14 +72,18 @@ export function calculateFareBreakup(trip: TripDraft, car: CarOption): FareBreak
     vehicleType: car.name,
     routeKm,
     billableKm,
+    minimumKm,
     ratePerKm: car.ratePerKm,
     baseFare,
     driverBata,
+    nightCharge,
     totalFare,
-    travelDays,
-    travelNights,
+    calendarDays,
+    nights,
     distanceSource,
     hasDistance,
+    hasValidOutstationDates,
+    canCalculateFare,
     note: getFareNote(trip.rideType)
   };
 }
@@ -81,42 +97,62 @@ export function getFareBreakupRows(breakup: FareBreakup): FareRow[] {
     {
       label: "Vehicle type",
       value: breakup.vehicleType
-    },
+    }
+  ];
+
+  if (breakup.rideType === "Outstation") {
+    rows.push(
+      {
+        label: "Calendar days",
+        value: breakup.hasValidOutstationDates ? String(breakup.calendarDays) : "Return date needed"
+      },
+      {
+        label: "Nights",
+        value: breakup.hasValidOutstationDates ? String(breakup.nights) : "Return date needed"
+      },
+      {
+        label: "Minimum KM",
+        value: breakup.hasValidOutstationDates ? formatKm(breakup.minimumKm) : "Return date needed"
+      }
+    );
+  }
+
+  rows.push(
     {
       label: "Route KM",
       value: breakup.hasDistance ? `${formatKm(breakup.routeKm)} (${formatDistanceSource(breakup.distanceSource)})` : "Needed"
     },
     {
       label: "Billable KM",
-      value: breakup.hasDistance ? formatKm(breakup.billableKm) : "Needed"
+      value: breakup.canCalculateFare ? formatKm(breakup.billableKm) : "Needed"
     },
     {
-      label: "Vehicle rate per KM",
+      label: "Rate per KM",
       value: `${formatCurrency(breakup.ratePerKm)} / KM`
     },
     {
       label: "Base fare",
-      value: breakup.hasDistance ? formatCurrency(breakup.baseFare) : "Needed"
+      value: breakup.canCalculateFare ? formatCurrency(breakup.baseFare) : "Needed"
     }
-  ];
+  );
 
   if (breakup.rideType === "Outstation") {
-    rows.splice(
-      2,
-      0,
-      { label: "Travel days", value: String(breakup.travelDays) },
-      { label: "Nights", value: String(breakup.travelNights) }
+    rows.push(
+      {
+        label: "Driver bata",
+        value: breakup.canCalculateFare ? formatCurrency(breakup.driverBata) : "Needed"
+      },
+      {
+        label: "Night charge",
+        value: breakup.canCalculateFare ? formatCurrency(breakup.nightCharge) : "Needed"
+      }
     );
-    rows.push({
-      label: "Driver bata",
-      value: breakup.hasDistance ? formatCurrency(breakup.driverBata) : "Needed"
-    });
   }
 
   rows.push(
     {
       label: "Total estimated fare",
-      value: breakup.hasDistance ? formatCurrency(breakup.totalFare) : "Enter KM to calculate",
+      value: breakup.canCalculateFare ? formatCurrency(breakup.totalFare) : getMissingFareMessage(breakup),
       emphasis: true
     },
     {
@@ -134,6 +170,37 @@ export function getFareRouteKm(trip: TripDraft) {
 
 export function getTripDistanceSource(trip: TripDraft): DistanceSource {
   return getDistanceSource(trip);
+}
+
+export function getOutstationCalendarDays(trip: Pick<TripDraft, "date" | "returnDate" | "rideType">) {
+  if (trip.rideType !== "Outstation") {
+    return 0;
+  }
+
+  const pickupDate = parseInputDate(trip.date);
+  const returnDate = parseInputDate(trip.returnDate);
+
+  if (pickupDate === null || returnDate === null || returnDate < pickupDate) {
+    return 0;
+  }
+
+  return Math.floor((returnDate - pickupDate) / DAY_MS) + 1;
+}
+
+export function getOutstationNights(trip: Pick<TripDraft, "date" | "returnDate" | "rideType">) {
+  return Math.max(0, getOutstationCalendarDays(trip) - 1);
+}
+
+export function getOutstationMinimumKm(trip: Pick<TripDraft, "date" | "returnDate" | "rideType">) {
+  const calendarDays = getOutstationCalendarDays(trip);
+  return calendarDays > 0 ? OUTSTATION_MINIMUM_KM_PER_DAY * calendarDays : 0;
+}
+
+export function isReturnDateBeforePickup(pickupDateValue: string, returnDateValue: string) {
+  const pickupDate = parseInputDate(pickupDateValue);
+  const returnDate = parseInputDate(returnDateValue);
+
+  return pickupDate !== null && returnDate !== null && returnDate < pickupDate;
 }
 
 export function formatCurrency(amount: number) {
@@ -189,4 +256,36 @@ function getDistanceSource(trip: TripDraft): DistanceSource {
   }
 
   return "missing";
+}
+
+function getMissingFareMessage(breakup: FareBreakup) {
+  if (breakup.rideType === "Outstation" && !breakup.hasValidOutstationDates && !breakup.hasDistance) {
+    return "Enter KM and return date";
+  }
+
+  if (breakup.rideType === "Outstation" && !breakup.hasValidOutstationDates) {
+    return "Select return date";
+  }
+
+  return "Enter KM to calculate";
+}
+
+function parseInputDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null;
+  }
+
+  const [year, month, day] = value.split("-").map(Number);
+  const timestamp = Date.UTC(year, month - 1, day);
+  const parsed = new Date(timestamp);
+
+  if (
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() !== month - 1 ||
+    parsed.getUTCDate() !== day
+  ) {
+    return null;
+  }
+
+  return timestamp;
 }

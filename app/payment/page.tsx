@@ -41,7 +41,7 @@ export default function PaymentPage() {
   }, []);
 
   async function payNow() {
-    if (!trip || !car || !passenger || isConfirming || !calculateFareBreakup(trip, car).hasDistance) {
+    if (!trip || !car || !passenger || isConfirming || !calculateFareBreakup(trip, car).canCalculateFare) {
       return;
     }
 

@@ -1,7 +1,14 @@
 import type { ReactNode } from "react";
 import { CalendarDays, Clock, MapPin, Route } from "lucide-react";
 import { getRideTypeLabel, type CarOption, type TripDraft } from "@/lib/booking";
-import { formatDistanceSource, formatKm, getFareRouteKm, getTripDistanceSource } from "@/lib/fare";
+import {
+  formatDistanceSource,
+  formatKm,
+  getFareRouteKm,
+  getOutstationCalendarDays,
+  getOutstationNights,
+  getTripDistanceSource
+} from "@/lib/fare";
 
 type TripSummaryProps = {
   trip: TripDraft | null;
@@ -22,6 +29,11 @@ export function TripSummary({ trip, car }: TripSummaryProps) {
 
   const routeKm = getFareRouteKm(trip);
   const distanceSource = getTripDistanceSource(trip);
+  const calendarDays = getOutstationCalendarDays(trip);
+  const nights = getOutstationNights(trip);
+  const outstationDuration = calendarDays > 0
+    ? `${calendarDays} day${calendarDays === 1 ? "" : "s"} / ${nights} night${nights === 1 ? "" : "s"}`
+    : "Return date needed";
 
   return (
     <div className="rounded border border-ink/10 bg-white p-6 shadow-soft">
@@ -29,7 +41,10 @@ export function TripSummary({ trip, car }: TripSummaryProps) {
       <div className="mt-5 grid gap-4 text-sm">
         <SummaryRow icon={<MapPin className="h-5 w-5" />} label="Pickup" value={trip.pickup} />
         <SummaryRow icon={<Route className="h-5 w-5" />} label="Drop" value={trip.dropoff} />
-        <SummaryRow icon={<CalendarDays className="h-5 w-5" />} label="Date" value={trip.date} />
+        <SummaryRow icon={<CalendarDays className="h-5 w-5" />} label="Pickup date" value={trip.date} />
+        {trip.rideType === "Outstation" ? (
+          <SummaryRow icon={<CalendarDays className="h-5 w-5" />} label="Return date" value={trip.returnDate} />
+        ) : null}
         <SummaryRow icon={<Clock className="h-5 w-5" />} label="Time" value={trip.time} />
         <div className="rounded bg-mist p-4">
           <p className="font-semibold">{getRideTypeLabel(trip.rideType)}</p>
@@ -42,10 +57,7 @@ export function TripSummary({ trip, car }: TripSummaryProps) {
             Distance: {routeKm > 0 ? `${formatKm(routeKm)} (${formatDistanceSource(distanceSource)})` : "Awaiting route or manual KM"}
           </p>
           {trip.rideType === "Outstation" ? (
-            <p className="mt-1 text-ink/70">
-              {trip.travelDays} day{trip.travelDays === 1 ? "" : "s"} / {trip.travelNights} night
-              {trip.travelNights === 1 ? "" : "s"}
-            </p>
+            <p className="mt-1 text-ink/70">{outstationDuration}</p>
           ) : null}
         </div>
       </div>

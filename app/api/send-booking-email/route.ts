@@ -67,7 +67,8 @@ function getBookingRows(booking: BookingRecord) {
     ["Email", booking.passenger.email],
     ["Pickup", booking.trip.pickup],
     ["Drop", booking.trip.dropoff],
-    ["Date", booking.trip.date],
+    ["Pickup date", booking.trip.date],
+    ["Return date", booking.trip.rideType === "Outstation" ? booking.trip.returnDate : "Not applicable"],
     ["Time", booking.trip.time],
     ["Ride type", getRideTypeLabel(booking.trip.rideType)],
     ["Vehicle", booking.car.name],
@@ -128,12 +129,11 @@ function isBookingRecord(value: unknown): value is BookingRecord {
     typeof trip.pickup === "string" &&
     typeof trip.dropoff === "string" &&
     typeof trip.date === "string" &&
+    typeof trip.returnDate === "string" &&
     typeof trip.time === "string" &&
     (trip.rideType === "Airport Transfer" || trip.rideType === "Within City" || trip.rideType === "Outstation") &&
     isNullableNumber(trip.routeKm) &&
     isNullableNumber(trip.manualKm) &&
-    typeof trip.travelDays === "number" &&
-    typeof trip.travelNights === "number" &&
     isObject(car) &&
     typeof car.id === "string" &&
     typeof car.name === "string" &&

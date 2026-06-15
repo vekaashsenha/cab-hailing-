@@ -19,13 +19,16 @@ export function FareBreakupCard({ trip, car, title = "Fare breakup" }: FareBreak
 
   const breakup = calculateFareBreakup(trip, car);
   const rows = getFareBreakupRows(breakup);
+  const missingMessage = !breakup.hasValidOutstationDates
+    ? "Select a valid return date on the homepage to calculate the outstation fare."
+    : "Google Maps distance is not available yet. Enter estimated KM on the rides page to continue.";
 
   return (
     <div className="rounded border border-ink/10 bg-white p-5 shadow-soft">
       <p className="text-sm font-semibold uppercase tracking-[0.16em] text-ember">{title}</p>
-      {!breakup.hasDistance ? (
+      {!breakup.canCalculateFare ? (
         <p className="mt-3 rounded bg-ember/10 px-3 py-2 text-sm text-ember">
-          Google Maps distance is not available yet. Enter estimated KM on the rides page to continue.
+          {missingMessage}
         </p>
       ) : null}
       <dl className="mt-4 grid gap-3 text-sm">

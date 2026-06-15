@@ -15,7 +15,17 @@ import {
   type CarOption,
   type TripDraft
 } from "@/lib/booking";
-import { calculateFareBreakup, formatCurrency, formatKm, getFareBreakupRows, getFareRouteKm, roundKm } from "@/lib/fare";
+import {
+  calculateFareBreakup,
+  formatCurrency,
+  formatKm,
+  getFareBreakupRows,
+  getFareRouteKm,
+  getOutstationCalendarDays,
+  getOutstationMinimumKm,
+  getOutstationNights,
+  roundKm
+} from "@/lib/fare";
 
 export default function RidesPage() {
   const router = useRouter();
@@ -59,6 +69,11 @@ export default function RidesPage() {
     }
 
     const breakup = calculateFareBreakup(trip, car);
+
+    if (!breakup.hasValidOutstationDates) {
+      setMessage("Select a valid return date before choosing a vehicle.");
+      return;
+    }
 
     if (!breakup.hasDistance) {
       setMessage("Enter estimated KM to calculate the fare before selecting a vehicle.");
@@ -114,7 +129,7 @@ export default function RidesPage() {
                       <CarFront className="h-7 w-7 text-gold" />
                     </div>
                     <p className="mt-2 text-3xl font-semibold">
-                      {breakup?.hasDistance ? formatCurrency(breakup.totalFare) : "--"}
+                      {breakup?.canCalculateFare ? formatCurrency(breakup.totalFare) : "--"}
                     </p>
                     <div className="mt-5 grid grid-cols-2 gap-3 text-sm text-ink/70">
                       <span className="flex items-center gap-2 rounded bg-mist px-3 py-2">
@@ -141,7 +156,7 @@ export default function RidesPage() {
                     <button
                       type="button"
                       onClick={() => selectCar(car)}
-                      disabled={!trip || !breakup?.hasDistance}
+                      disabled={!trip || !breakup?.canCalculateFare}
                       className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded bg-ink px-5 font-semibold text-white transition hover:bg-ember disabled:cursor-not-allowed disabled:bg-ink/35"
                     >
                       Select
@@ -170,20 +185,13 @@ function TripDistanceControls({
   }
 
   const routeKm = getFareRouteKm(trip);
+  const calendarDays = getOutstationCalendarDays(trip);
+  const nights = getOutstationNights(trip);
+  const minimumKm = getOutstationMinimumKm(trip);
 
   function updateManualKm(value: string) {
     const nextValue = Number(value);
     onChange({ manualKm: Number.isFinite(nextValue) && nextValue > 0 ? nextValue : null });
-  }
-
-  function updateTravelDays(value: string) {
-    const nextValue = Number(value);
-    onChange({ travelDays: Number.isFinite(nextValue) ? Math.max(1, Math.round(nextValue)) : 1 });
-  }
-
-  function updateTravelNights(value: string) {
-    const nextValue = Number(value);
-    onChange({ travelNights: Number.isFinite(nextValue) ? Math.max(0, Math.round(nextValue)) : 0 });
   }
 
   return (
@@ -212,29 +220,22 @@ function TripDistanceControls({
         </label>
 
         {trip.rideType === "Outstation" ? (
-          <div className="grid gap-4 sm:grid-cols-2">
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold">Travel days</span>
-              <input
-                type="number"
-                min="1"
-                step="1"
-                value={trip.travelDays}
-                onChange={(event) => updateTravelDays(event.target.value)}
-                className="h-12 w-full rounded border border-ink/10 px-4 outline-none transition focus:border-ember focus:ring-2 focus:ring-ember/20"
-              />
-            </label>
-            <label className="block">
-              <span className="mb-2 block text-sm font-semibold">Nights</span>
-              <input
-                type="number"
-                min="0"
-                step="1"
-                value={trip.travelNights}
-                onChange={(event) => updateTravelNights(event.target.value)}
-                className="h-12 w-full rounded border border-ink/10 px-4 outline-none transition focus:border-ember focus:ring-2 focus:ring-ember/20"
-              />
-            </label>
+          <div className="rounded bg-mist p-4 text-sm">
+            <p className="font-semibold">Outstation calendar billing</p>
+            <dl className="mt-3 grid gap-2">
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-ink/60">Calendar days</dt>
+                <dd className="font-semibold">{calendarDays > 0 ? calendarDays : "Return date needed"}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-ink/60">Nights</dt>
+                <dd className="font-semibold">{calendarDays > 0 ? nights : "Return date needed"}</dd>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <dt className="text-ink/60">Minimum KM</dt>
+                <dd className="font-semibold">{minimumKm > 0 ? formatKm(minimumKm) : "Return date needed"}</dd>
+              </div>
+            </dl>
           </div>
         ) : null}
       </div>

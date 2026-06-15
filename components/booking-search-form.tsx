@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CalendarDays, CarFront, Clock, LocateFixed, MapPin, Search } from "lucide-react";
 import { emptyTrip, getRideTypeLabel, getTrip, rideTypes, saveTrip, type TripDraft } from "@/lib/booking";
+import { isReturnDateBeforePickup } from "@/lib/fare";
 import {
   getGoogleMapsErrorMessage,
   getGoogleMapsFailureReason,
@@ -120,6 +121,22 @@ export function BookingSearchForm() {
     setTrip((current) => ({ ...current, [key]: value }));
   }
 
+  function updatePickupDate(value: string) {
+    setTrip((current) => ({
+      ...current,
+      date: value,
+      returnDate: current.returnDate && isReturnDateBeforePickup(value, current.returnDate) ? "" : current.returnDate
+    }));
+  }
+
+  function updateRideType(value: TripDraft["rideType"]) {
+    setTrip((current) => ({
+      ...current,
+      rideType: value,
+      returnDate: value === "Outstation" ? current.returnDate : ""
+    }));
+  }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setMessage("");
@@ -129,14 +146,23 @@ export function BookingSearchForm() {
       return;
     }
 
+    if (trip.rideType === "Outstation" && !trip.returnDate) {
+      setMessage("Please select a return date for outstation rides.");
+      return;
+    }
+
+    if (trip.rideType === "Outstation" && isReturnDateBeforePickup(trip.date, trip.returnDate)) {
+      setMessage("Return date cannot be earlier than pickup date.");
+      return;
+    }
+
     saveTrip({
       ...trip,
       pickup: trip.pickup.trim(),
       dropoff: trip.dropoff.trim(),
+      returnDate: trip.rideType === "Outstation" ? trip.returnDate : "",
       routeKm: null,
-      manualKm: null,
-      travelDays: 1,
-      travelNights: 0
+      manualKm: null
     });
     router.push("/rides");
   }
@@ -186,15 +212,33 @@ export function BookingSearchForm() {
           <label className="block">
             <span className="mb-2 flex items-center gap-2 text-sm font-semibold">
               <CalendarDays className="h-4 w-4 text-ember" />
-              Date
+              Pickup date
             </span>
             <input
               type="date"
               value={trip.date}
-              onChange={(event) => updateTrip("date", event.target.value)}
+              onChange={(event) => updatePickupDate(event.target.value)}
+              required
               className="h-12 w-full rounded border border-ink/10 bg-white px-4 outline-none transition focus:border-ember focus:ring-2 focus:ring-ember/20"
             />
           </label>
+
+          {trip.rideType === "Outstation" ? (
+            <label className="block">
+              <span className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                <CalendarDays className="h-4 w-4 text-ember" />
+                Return date
+              </span>
+              <input
+                type="date"
+                value={trip.returnDate}
+                min={trip.date || undefined}
+                onChange={(event) => updateTrip("returnDate", event.target.value)}
+                required
+                className="h-12 w-full rounded border border-ink/10 bg-white px-4 outline-none transition focus:border-ember focus:ring-2 focus:ring-ember/20"
+              />
+            </label>
+          ) : null}
 
           <label className="block">
             <span className="mb-2 flex items-center gap-2 text-sm font-semibold">
@@ -205,6 +249,7 @@ export function BookingSearchForm() {
               type="time"
               value={trip.time}
               onChange={(event) => updateTrip("time", event.target.value)}
+              required
               className="h-12 w-full rounded border border-ink/10 bg-white px-4 outline-none transition focus:border-ember focus:ring-2 focus:ring-ember/20"
             />
           </label>
@@ -217,7 +262,7 @@ export function BookingSearchForm() {
           </span>
           <select
             value={trip.rideType}
-            onChange={(event) => updateTrip("rideType", event.target.value as TripDraft["rideType"])}
+            onChange={(event) => updateRideType(event.target.value as TripDraft["rideType"])}
             className="h-12 w-full rounded border border-ink/10 bg-white px-4 outline-none transition focus:border-ember focus:ring-2 focus:ring-ember/20"
           >
             {rideTypes.map((type) => (

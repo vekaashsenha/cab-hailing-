@@ -60,7 +60,7 @@ export default function BookingPage() {
     router.push("/payment");
   }
 
-  const canContinue = Boolean(trip && car && calculateFareBreakup(trip, car).hasDistance);
+  const canContinue = Boolean(trip && car && calculateFareBreakup(trip, car).canCalculateFare);
 
   return (
     <PageShell
