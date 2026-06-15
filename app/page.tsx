@@ -81,11 +81,11 @@ export default function Home() {
               Live service area
             </p>
             <h2 className="mt-2 font-serif text-4xl font-semibold text-ink">
-              Plan with Google Maps
+              Route planning at a glance
             </h2>
           </div>
           <p className="max-w-2xl text-sm leading-6 text-ink/70">
-            Use address suggestions and route-aware previews when Google Maps is available. Booking continues gracefully if maps cannot load.
+            Plan your journey with real-time route assistance and a smooth chauffeur booking experience.
           </p>
         </div>
         <GoogleMapPreview />
