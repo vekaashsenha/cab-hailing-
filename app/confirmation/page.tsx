@@ -27,6 +27,7 @@ export default function ConfirmationPage() {
 
     if (
       storedBooking &&
+      storedBooking.paymentStatus === "paid" &&
       shouldSendOperationsEmail(storedBooking.operationsEmailStatus) &&
       !emailRequestStarted.current
     ) {
@@ -67,7 +68,10 @@ export default function ConfirmationPage() {
               <Detail label="Mobile" value={booking.passenger.mobile} />
               <Detail label="Email" value={booking.passenger.email} />
               <Detail label="Vehicle" value={booking.car.name} />
-              <Detail label="Payment option" value={booking.payment} />
+              <Detail label="Payment method" value={booking.payment} />
+              <Detail label="Payment status" value={formatPaymentStatus(booking.paymentStatus)} />
+              <Detail label="Razorpay payment ID" value={booking.razorpayPaymentId || "Not available"} />
+              <Detail label="Razorpay order ID" value={booking.razorpayOrderId || "Not available"} />
               <Detail
                 label="Total estimated fare"
                 value={formatCurrency(calculateFareBreakup(booking.trip, booking.car).totalFare)}
@@ -247,6 +251,18 @@ function getSafeEmailErrorReason(status: number, error?: string) {
   }
 
   return "Email request failed.";
+}
+
+function formatPaymentStatus(status: BookingRecord["paymentStatus"]) {
+  if (status === "paid") {
+    return "Paid";
+  }
+
+  if (status === "failed") {
+    return "Failed";
+  }
+
+  return "Pending";
 }
 
 function Detail({ label, value }: { label: string; value: string }) {

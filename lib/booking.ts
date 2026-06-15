@@ -28,7 +28,8 @@ export type PassengerDetails = {
   instruction: string;
 };
 
-export type PaymentOption = "Card" | "UPI" | "Pay Later";
+export type PaymentOption = "Razorpay";
+export type PaymentStatus = "pending" | "paid" | "failed";
 
 export type OperationsEmailStatus = {
   attempted: boolean;
@@ -43,6 +44,11 @@ export type BookingRecord = {
   car: CarOption;
   passenger: PassengerDetails;
   payment: PaymentOption;
+  paymentStatus: PaymentStatus;
+  razorpayPaymentId: string;
+  razorpayOrderId: string;
+  razorpaySignature: string;
+  paymentErrorReason: string;
   operationsEmailStatus?: OperationsEmailStatus;
 };
 
@@ -150,27 +156,19 @@ export function savePassenger(passenger: PassengerDetails) {
 }
 
 export function saveBooking(record: BookingRecord) {
+  const normalizedBooking = normalizeBooking(record);
   writeJson(bookingKey, {
-    ...record,
-    trip: normalizeTrip(record.trip),
-    car: normalizeCar(record.car) ?? record.car,
-    operationsEmailStatus: normalizeOperationsEmailStatus(record.operationsEmailStatus)
+    ...normalizedBooking,
+    trip: normalizeTrip(normalizedBooking.trip),
+    car: normalizeCar(normalizedBooking.car) ?? normalizedBooking.car,
+    operationsEmailStatus: normalizeOperationsEmailStatus(normalizedBooking.operationsEmailStatus)
   });
 }
 
 export function getBooking() {
-  const booking = readJson<BookingRecord>(bookingKey);
+  const booking = readJson<Partial<BookingRecord>>(bookingKey);
 
-  if (!booking) {
-    return null;
-  }
-
-  return {
-    ...booking,
-    trip: normalizeTrip(booking.trip),
-    car: normalizeCar(booking.car) ?? booking.car,
-    operationsEmailStatus: normalizeOperationsEmailStatus(booking.operationsEmailStatus)
-  };
+  return booking ? normalizeBooking(booking) : null;
 }
 
 export function createBookingId() {
@@ -179,16 +177,37 @@ export function createBookingId() {
   return `CBH-${stamp}-${suffix}`;
 }
 
-function normalizeTrip(trip: Partial<TripDraft>): TripDraft {
+function normalizeBooking(record: Partial<BookingRecord>): BookingRecord {
+  const car = normalizeCar(record.car ?? null) ?? normalizeCar({ id: record.car?.id });
+
   return {
-    pickup: typeof trip.pickup === "string" ? trip.pickup : "",
-    dropoff: typeof trip.dropoff === "string" ? trip.dropoff : "",
-    date: typeof trip.date === "string" ? trip.date : "",
-    returnDate: typeof trip.returnDate === "string" ? trip.returnDate : "",
-    time: typeof trip.time === "string" ? trip.time : "",
-    rideType: isRideType(trip.rideType) ? trip.rideType : "Airport Transfer",
-    routeKm: normalizeNullableKm(trip.routeKm),
-    manualKm: normalizeNullableKm(trip.manualKm)
+    ...record,
+    bookingId: typeof record.bookingId === "string" ? record.bookingId : "",
+    trip: normalizeTrip(record.trip),
+    car: car ?? carOptions[0],
+    passenger: normalizePassenger(record.passenger),
+    payment: "Razorpay",
+    paymentStatus: normalizePaymentStatus(record.paymentStatus),
+    razorpayPaymentId: typeof record.razorpayPaymentId === "string" ? record.razorpayPaymentId : "",
+    razorpayOrderId: typeof record.razorpayOrderId === "string" ? record.razorpayOrderId : "",
+    razorpaySignature: typeof record.razorpaySignature === "string" ? record.razorpaySignature : "",
+    paymentErrorReason: typeof record.paymentErrorReason === "string" ? record.paymentErrorReason : "",
+    operationsEmailStatus: normalizeOperationsEmailStatus(record.operationsEmailStatus)
+  };
+}
+
+function normalizeTrip(trip: Partial<TripDraft> | undefined): TripDraft {
+  const value = trip ?? {};
+
+  return {
+    pickup: typeof value.pickup === "string" ? value.pickup : "",
+    dropoff: typeof value.dropoff === "string" ? value.dropoff : "",
+    date: typeof value.date === "string" ? value.date : "",
+    returnDate: typeof value.returnDate === "string" ? value.returnDate : "",
+    time: typeof value.time === "string" ? value.time : "",
+    rideType: isRideType(value.rideType) ? value.rideType : "Airport Transfer",
+    routeKm: normalizeNullableKm(value.routeKm),
+    manualKm: normalizeNullableKm(value.manualKm)
   };
 }
 
@@ -205,6 +224,19 @@ function normalizeCar(car: Partial<CarOption> | null) {
   const id = legacyIdMap[car.id] ?? car.id;
 
   return carOptions.find((option) => option.id === id) ?? null;
+}
+
+function normalizePassenger(passenger: Partial<PassengerDetails> | undefined): PassengerDetails {
+  return {
+    fullName: typeof passenger?.fullName === "string" ? passenger.fullName : "",
+    mobile: typeof passenger?.mobile === "string" ? passenger.mobile : "",
+    email: typeof passenger?.email === "string" ? passenger.email : "",
+    instruction: typeof passenger?.instruction === "string" ? passenger.instruction : ""
+  };
+}
+
+function normalizePaymentStatus(value: unknown): PaymentStatus {
+  return value === "paid" || value === "failed" ? value : "pending";
 }
 
 function isRideType(value: unknown): value is RideType {

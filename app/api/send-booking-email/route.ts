@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
-import { getRideTypeLabel, type BookingRecord, type PaymentOption } from "@/lib/booking";
+import { getRideTypeLabel, type BookingRecord, type PaymentStatus } from "@/lib/booking";
 import { calculateFareBreakup, getFareBreakupRows } from "@/lib/fare";
 
 const RESEND_EMAILS_URL = "https://api.resend.com/emails";
 const TEST_SENDER = "onboarding@resend.dev";
-const paymentOptions: PaymentOption[] = ["Card", "UPI", "Pay Later"];
+const paymentStatuses: PaymentStatus[] = ["pending", "paid", "failed"];
 
 type SendBookingEmailRequest = {
   booking?: BookingRecord;
@@ -115,7 +115,10 @@ function getBookingRows(booking: BookingRecord) {
     ["Time", booking.trip.time],
     ["Ride type", getRideTypeLabel(booking.trip.rideType)],
     ["Vehicle", booking.car.name],
-    ["Payment option", booking.payment],
+    ["Payment method", booking.payment],
+    ["Payment status", formatPaymentStatus(booking.paymentStatus)],
+    ["Razorpay payment ID", booking.razorpayPaymentId || "Not available"],
+    ["Razorpay order ID", booking.razorpayOrderId || "Not available"],
     ...fareRows.map((row) => [row.label, row.value] as const),
     ["Special instruction", booking.passenger.instruction || "None"]
   ] as const;
@@ -190,8 +193,12 @@ function isBookingRecord(value: unknown): value is BookingRecord {
     typeof passenger.mobile === "string" &&
     typeof passenger.email === "string" &&
     typeof passenger.instruction === "string" &&
-    typeof payment === "string" &&
-    paymentOptions.includes(payment as PaymentOption)
+    payment === "Razorpay" &&
+    paymentStatuses.includes(value.paymentStatus as PaymentStatus) &&
+    typeof value.razorpayPaymentId === "string" &&
+    typeof value.razorpayOrderId === "string" &&
+    typeof value.razorpaySignature === "string" &&
+    typeof value.paymentErrorReason === "string"
   );
 }
 
@@ -201,6 +208,18 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 function isNullableNumber(value: unknown) {
   return value === null || typeof value === "number";
+}
+
+function formatPaymentStatus(status: PaymentStatus) {
+  if (status === "paid") {
+    return "Paid";
+  }
+
+  if (status === "failed") {
+    return "Failed";
+  }
+
+  return "Pending";
 }
 
 async function readResendResponse(response: Response): Promise<ResendEmailResponse | null> {
