@@ -100,11 +100,9 @@ function getMapStatusTitle(status: MapStatus) {
 function getMapStatusMessage(status: MapStatus) {
   switch (status) {
     case "key-missing":
-      return "The map preview is unavailable right now. You can still enter your trip details manually.";
     case "script-failed":
-      return "The map preview could not load right now. You can still continue with your booking.";
     case "places-unavailable":
-      return "Location details are unavailable right now. You can still continue with your booking.";
+      return "Location assistance is temporarily unavailable. You can continue by entering your address manually.";
     case "loading":
     case "ready":
     default:
