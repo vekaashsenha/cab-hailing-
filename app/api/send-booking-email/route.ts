@@ -30,7 +30,7 @@ export async function POST(request: Request) {
       error: "Missing booking email configuration."
     });
     return NextResponse.json(
-      { ok: false, error: "Booking email is not configured." },
+      { ok: false, error: "Reservation notification could not be completed." },
       { status: 500 }
     );
   }
@@ -238,25 +238,16 @@ async function readResendResponse(response: Response): Promise<ResendEmailRespon
   }
 }
 
-function getResendErrorMessage(status: number, body: ResendEmailResponse | null) {
-  const message =
-    body?.message ||
-    (typeof body?.error === "string" ? body.error : body?.error?.message) ||
-    "";
-
-  if (message) {
-    return sanitizeMessage(message);
-  }
-
+function getResendErrorMessage(status: number, _body: ResendEmailResponse | null) {
   if (status === 401 || status === 403) {
-    return "Email provider authorization failed.";
+    return "Reservation notification could not be completed.";
   }
 
   if (status === 422) {
-    return "Email provider rejected the message details.";
+    return "Reservation notification could not be completed.";
   }
 
-  return "Email provider could not send the message.";
+  return "Reservation notification could not be completed.";
 }
 
 function getSafeErrorMessage(error: unknown, fallback: string) {
