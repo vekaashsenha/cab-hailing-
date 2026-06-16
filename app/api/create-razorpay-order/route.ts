@@ -25,7 +25,7 @@ export async function POST(request: Request) {
 
   if (!keyId || !keySecret) {
     return NextResponse.json(
-      { error: "Razorpay test credentials are not configured." },
+      { error: "Online payment is temporarily unavailable. Please try again shortly." },
       { status: 500 }
     );
   }
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
   try {
     payload = (await request.json()) as CreateRazorpayOrderRequest;
   } catch {
-    return NextResponse.json({ error: "Invalid Razorpay order request." }, { status: 400 });
+    return NextResponse.json({ error: "Payment could not be started. Please retry." }, { status: 400 });
   }
 
   const amountInInr = Number(payload.amount);
@@ -66,7 +66,7 @@ export async function POST(request: Request) {
       })
     });
   } catch {
-    return NextResponse.json({ error: "Razorpay order request could not be completed." }, { status: 502 });
+    return NextResponse.json({ error: "Payment could not be started. Please retry." }, { status: 502 });
   }
 
   const order = (await razorpayResponse.json().catch(() => null)) as RazorpayOrderResponse | null;
@@ -87,6 +87,5 @@ export async function POST(request: Request) {
 }
 
 function getRazorpayOrderError(order: RazorpayOrderResponse | null) {
-  const description = order?.error?.description || order?.error?.reason;
-  return description || "Razorpay order could not be created.";
+  return "Payment could not be started. Please retry.";
 }
