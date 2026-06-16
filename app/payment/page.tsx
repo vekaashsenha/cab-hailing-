@@ -113,7 +113,7 @@ export default function PaymentPage() {
     }
 
     if (!razorpayPublicKeyId) {
-      setMessage("Razorpay checkout key is not configured.");
+      setMessage("Online payment is temporarily unavailable. Please try again shortly.");
       return;
     }
 
@@ -127,7 +127,7 @@ export default function PaymentPage() {
       const checkoutLoaded = await loadRazorpayScript();
 
       if (!checkoutLoaded) {
-        throw new Error("Razorpay Checkout could not load. Please retry.");
+        throw new Error("The payment window is temporarily unavailable. Please retry.");
       }
 
       const paymentResult = await openRazorpayCheckout({
@@ -151,7 +151,7 @@ export default function PaymentPage() {
         operationsEmailStatus: {
           attempted: false,
           sent: false,
-          errorReason: "Email request has not completed yet.",
+          errorReason: "Reservation notification has not completed yet.",
           resendId: ""
         }
       };
@@ -219,7 +219,7 @@ export default function PaymentPage() {
               <ShieldCheck className="mb-5 h-7 w-7 text-emerald-700" />
               <span className="block text-lg font-semibold">Payment after fare lock</span>
               <span className="mt-1 block text-sm leading-6 text-ink/60">
-                Your payment IDs are saved only after Razorpay reports a successful payment.
+                Your booking is confirmed only after a successful payment.
               </span>
             </div>
           </div>
@@ -254,7 +254,7 @@ async function createRazorpayOrder(amount: number, bookingId: string) {
   const result = (await response.json().catch(() => null)) as RazorpayOrderResponse | null;
 
   if (!response.ok || !result?.orderId || !result.amount || !result.currency) {
-    throw new Error(result?.error || "Razorpay order could not be created.");
+    throw new Error(result?.error || "Payment could not be started. Please retry.");
   }
 
   return {
@@ -311,7 +311,7 @@ function openRazorpayCheckout({
 }) {
   return new Promise<RazorpaySuccessResponse>((resolve, reject) => {
     if (!window.Razorpay) {
-      reject(new Error("Razorpay Checkout is unavailable. Please retry."));
+      reject(new Error("The payment window is temporarily unavailable. Please retry."));
       return;
     }
 
@@ -348,7 +348,7 @@ function openRazorpayCheckout({
         resolve(response);
       },
       modal: {
-        ondismiss: () => fail("Payment popup was closed before completion.")
+        ondismiss: () => fail("Payment window was closed before completion.")
       }
     });
 
@@ -383,14 +383,14 @@ async function sendBookingEmail(booking: BookingRecord): Promise<OperationsEmail
     return {
       attempted: true,
       sent: false,
-      errorReason: result?.error || "Booking email could not be sent.",
+      errorReason: result?.error || "Reservation notification could not be completed.",
       resendId: ""
     };
   } catch {
     return {
       attempted: true,
       sent: false,
-      errorReason: "Email request could not be completed.",
+      errorReason: "Reservation notification could not be completed.",
       resendId: ""
     };
   }
