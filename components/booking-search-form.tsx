@@ -51,7 +51,7 @@ export function BookingSearchForm() {
           updateGoogleMapsDebugState({
             pickupAutocompleteAttached: false,
             dropAutocompleteAttached: false,
-            lastErrorMessage: "Homepage pickup and drop input refs were not ready."
+            lastErrorMessage: "Location assistance is temporarily unavailable."
           });
           setMapsStatus("autocomplete-failed");
           return;
@@ -88,7 +88,7 @@ export function BookingSearchForm() {
             dropAutocompleteAttached: false,
             lastErrorMessage: getGoogleMapsErrorMessage(
               error,
-              "Google Places Autocomplete could not attach to the pickup and drop inputs."
+              "Location assistance is temporarily unavailable."
             )
           });
           setMapsStatus("autocomplete-failed");
@@ -291,17 +291,14 @@ export function BookingSearchForm() {
 function getAutocompleteStatusMessage(status: MapsAutocompleteStatus) {
   switch (status) {
     case "ready":
-      return "Places suggestions are enabled.";
+      return "Address suggestions are ready as you type.";
     case "key-missing":
-      return "Location suggestions are unavailable right now. You can enter addresses manually.";
     case "script-failed":
-      return "Location suggestions could not load right now. You can enter addresses manually.";
     case "places-unavailable":
-      return "Location suggestions are unavailable right now. You can enter addresses manually.";
     case "autocomplete-failed":
-      return "Location suggestions could not connect right now. You can enter addresses manually.";
+      return "Location assistance is temporarily unavailable. You can continue by entering your address manually.";
     case "loading":
     default:
-      return "Loading location suggestions.";
+      return "Preparing location assistance.";
   }
 }
