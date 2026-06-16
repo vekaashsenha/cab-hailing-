@@ -80,7 +80,7 @@ export function RouteMap({ trip, onDistanceResolved }: RouteMapProps) {
             } else {
               setStatus("fallback");
               setFallbackTitle("Route preview unavailable");
-              setMessage("We could not draw this route yet. Your trip details are saved and ride selection still works.");
+              setMessage("Route assistance is temporarily unavailable. You can continue by entering estimated KM manually.");
             }
           }
         );
@@ -142,12 +142,10 @@ function getRouteMapStatusTitle(reason: ReturnType<typeof getGoogleMapsFailureRe
 function getRouteMapStatusMessage(reason: ReturnType<typeof getGoogleMapsFailureReason>) {
   switch (reason) {
     case "key-missing":
-      return "The route preview is unavailable right now. Enter estimated KM manually to continue.";
     case "script-failed":
-      return "The route preview could not load right now. Enter estimated KM manually to continue.";
     case "places-unavailable":
-      return "Route details are unavailable right now. Enter estimated KM manually to continue.";
+      return "Location assistance is temporarily unavailable. You can continue by entering estimated KM manually.";
     default:
-      return "The route preview could not load right now. Enter estimated KM manually to continue.";
+      return "Location assistance is temporarily unavailable. You can continue by entering estimated KM manually.";
   }
 }
