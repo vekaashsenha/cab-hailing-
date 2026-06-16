@@ -9,7 +9,8 @@ import { TripSummary } from "@/components/trip-summary";
 import { getBooking, saveBooking, type BookingRecord, type OperationsEmailStatus } from "@/lib/booking";
 import { calculateFareBreakup, formatCurrency } from "@/lib/fare";
 
-const PENDING_EMAIL_MESSAGE = "Email request is being sent.";
+const PENDING_EMAIL_MESSAGE = "Reservation notification is being sent.";
+const LEGACY_PENDING_EMAIL_MESSAGE = "Email request is being sent.";
 
 type SendBookingEmailResponse = {
   ok?: boolean;
@@ -98,7 +99,7 @@ export default function ConfirmationPage() {
           <CheckCircle2 className="mx-auto mb-4 h-12 w-12 text-ember" />
           <h2 className="text-2xl font-semibold">No confirmed booking yet</h2>
           <p className="mx-auto mt-3 max-w-xl text-sm leading-6 text-ink/70">
-            Complete the booking flow to generate a dummy booking ID and trip confirmation.
+            Complete the booking flow to receive your trip confirmation.
           </p>
           <Link
             href="/"
@@ -116,22 +117,21 @@ export default function ConfirmationPage() {
 function OperationsEmailStatusPanel({ status }: { status?: OperationsEmailStatus }) {
   const sent = status?.sent === true;
   const attempted = status?.attempted === true;
-  const isPending = attempted && !sent && status?.errorReason === PENDING_EMAIL_MESSAGE;
-  const errorReason = status?.errorReason || "Email request was not recorded for this booking.";
+  const isPending =
+    attempted &&
+    !sent &&
+    (status?.errorReason === PENDING_EMAIL_MESSAGE || status?.errorReason === LEGACY_PENDING_EMAIL_MESSAGE);
+  const errorReason = getCustomerNotificationStatus(status?.errorReason);
 
   return (
     <div className="mt-6 rounded bg-mist p-4">
       <div className="flex items-start gap-3">
         <Mail className={`mt-0.5 h-5 w-5 flex-none ${sent ? "text-emerald-700" : "text-ember"}`} />
         <div className="w-full">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink/50">Operations email</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-ink/50">Reservation notification</p>
           <dl className="mt-3 grid gap-2 text-sm">
             <div className="flex items-center justify-between gap-4">
-              <dt className="text-ink/60">Email request attempted</dt>
-              <dd className="font-semibold text-ink">{attempted ? "Yes" : "No"}</dd>
-            </div>
-            <div className="flex items-center justify-between gap-4">
-              <dt className="text-ink/60">Operations email sent</dt>
+              <dt className="text-ink/60">Reservation team notified</dt>
               <dd className="font-semibold text-ink">{sent ? "Yes" : "No"}</dd>
             </div>
             {isPending ? (
@@ -142,7 +142,7 @@ function OperationsEmailStatusPanel({ status }: { status?: OperationsEmailStatus
             ) : null}
             {!sent && !isPending ? (
               <div className="flex items-start justify-between gap-4">
-                <dt className="text-ink/60">Safe error reason</dt>
+                <dt className="text-ink/60">Status</dt>
                 <dd className="max-w-[260px] text-right font-semibold text-ink">{errorReason}</dd>
               </div>
             ) : null}
@@ -154,7 +154,11 @@ function OperationsEmailStatusPanel({ status }: { status?: OperationsEmailStatus
 }
 
 function shouldSendOperationsEmail(status?: OperationsEmailStatus) {
-  return !status?.attempted || status.errorReason === PENDING_EMAIL_MESSAGE;
+  return (
+    !status?.attempted ||
+    status.errorReason === PENDING_EMAIL_MESSAGE ||
+    status.errorReason === LEGACY_PENDING_EMAIL_MESSAGE
+  );
 }
 
 async function sendOperationsEmail(
@@ -198,7 +202,7 @@ async function sendOperationsEmail(
       operationsEmailStatus: {
         attempted: true,
         sent: false,
-        errorReason: "Email request could not be completed.",
+        errorReason: "Reservation notification could not be completed.",
         resendId: ""
       }
     };
@@ -237,20 +241,37 @@ function getEmailStatusFromResponse(
   };
 }
 
-function getSafeEmailErrorReason(status: number, error?: string) {
-  if (error) {
-    return error;
-  }
-
+function getSafeEmailErrorReason(status: number, _error?: string) {
   if (status === 500) {
-    return "Booking email is not configured.";
+    return "Reservation notification could not be completed.";
   }
 
   if (status === 502) {
-    return "Email provider rejected the message.";
+    return "Reservation notification could not be completed.";
   }
 
-  return "Email request failed.";
+  return "Reservation notification could not be completed.";
+}
+
+function getCustomerNotificationStatus(errorReason?: string) {
+  if (!errorReason || errorReason === "Email request was not recorded for this booking.") {
+    return "Reservation notification is pending.";
+  }
+
+  if (errorReason === PENDING_EMAIL_MESSAGE || errorReason === LEGACY_PENDING_EMAIL_MESSAGE) {
+    return "Sending...";
+  }
+
+  if (
+    errorReason.toLowerCase().includes("configured") ||
+    errorReason.toLowerCase().includes("provider") ||
+    errorReason.toLowerCase().includes("payload") ||
+    errorReason.toLowerCase().includes("request")
+  ) {
+    return "Reservation notification could not be completed.";
+  }
+
+  return errorReason;
 }
 
 function formatPaymentStatus(status: BookingRecord["paymentStatus"]) {
