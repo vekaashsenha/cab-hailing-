@@ -236,7 +236,7 @@ export function getServiceTypeLabel(rideType: RideType) {
 
 export function formatDistanceSource(source: DistanceSource) {
   if (source === "maps") {
-    return "Google Maps";
+    return "Route assisted";
   }
 
   if (source === "manual") {
