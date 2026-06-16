@@ -56,7 +56,7 @@ export function getGoogleMapsFailureReason(error: unknown): GoogleMapsFailureRea
   return error instanceof GoogleMapsLoadError ? error.reason : "script-failed";
 }
 
-export function getGoogleMapsErrorMessage(error: unknown, fallback = "Google Maps could not load.") {
+export function getGoogleMapsErrorMessage(error: unknown, fallback = "Location assistance is temporarily unavailable.") {
   return error instanceof Error ? error.message : fallback;
 }
 
@@ -94,7 +94,7 @@ export function updateGoogleMapsDebugState(patch: Partial<GoogleMapsDebugState>)
 
 export async function loadGoogleMaps() {
   if (typeof window === "undefined") {
-    throw createGoogleMapsLoadError("Google Maps can only load in the browser.", "script-failed");
+    throw createGoogleMapsLoadError("Location assistance is temporarily unavailable.", "script-failed");
   }
 
   const key = getGoogleMapsApiKey();
@@ -104,7 +104,7 @@ export async function loadGoogleMaps() {
   });
 
   if (!key) {
-    throw createGoogleMapsLoadError("Google Maps API key is missing.", "key-missing");
+    throw createGoogleMapsLoadError("Location assistance is temporarily unavailable.", "key-missing");
   }
 
   if (window.google?.maps) {
@@ -135,7 +135,7 @@ function injectGoogleMapsScript(key: string) {
         once: true
       });
       existingScript.addEventListener("error", () => {
-        reject(createGoogleMapsLoadError("Google Maps script failed to load.", "script-failed"));
+        reject(createGoogleMapsLoadError("Location assistance is temporarily unavailable.", "script-failed"));
       });
       return;
     }
@@ -146,7 +146,7 @@ function injectGoogleMapsScript(key: string) {
       previousAuthFailure?.();
       reject(
         createGoogleMapsLoadError(
-          "Google Maps authentication failed. Check API key restrictions, billing, and enabled APIs.",
+          "Location assistance is temporarily unavailable.",
           "script-failed"
         )
       );
@@ -171,7 +171,7 @@ function injectGoogleMapsScript(key: string) {
     script.async = true;
     script.defer = true;
     script.onerror = () => {
-      reject(createGoogleMapsLoadError("Google Maps script failed to load.", "script-failed"));
+      reject(createGoogleMapsLoadError("Location assistance is temporarily unavailable.", "script-failed"));
     };
 
     document.head.appendChild(script);
@@ -181,13 +181,13 @@ function injectGoogleMapsScript(key: string) {
 async function resolveLoadedGoogleMaps() {
   if (googleMapsAuthFailed) {
     throw createGoogleMapsLoadError(
-      "Google Maps authentication failed. Check API key restrictions, billing, and enabled APIs.",
+      "Location assistance is temporarily unavailable.",
       "script-failed"
     );
   }
 
   if (!window.google?.maps) {
-    throw createGoogleMapsLoadError("Google Maps did not initialize.", "script-failed");
+    throw createGoogleMapsLoadError("Location assistance is temporarily unavailable.", "script-failed");
   }
 
   updateGoogleMapsDebugState({ scriptLoaded: true });
@@ -198,11 +198,11 @@ async function resolveLoadedGoogleMaps() {
       await window.google.maps.importLibrary("places");
     }
   } catch {
-    throw createGoogleMapsLoadError("Google Maps Places library failed to load.", "places-unavailable");
+    throw createGoogleMapsLoadError("Location assistance is temporarily unavailable.", "places-unavailable");
   }
 
   if (!window.google.maps.places?.Autocomplete) {
-    throw createGoogleMapsLoadError("Google Places Autocomplete is unavailable.", "places-unavailable");
+    throw createGoogleMapsLoadError("Location assistance is temporarily unavailable.", "places-unavailable");
   }
 
   updateGoogleMapsDebugState({
