@@ -89,7 +89,7 @@ export default function RidesPage() {
     <PageShell
       eyebrow="Available rides"
       title="Select your cab"
-      copy="Review your trip details, preview the route when Google Maps is configured, and choose the right vehicle for the journey."
+      copy="Review your trip details, confirm the journey distance, and choose the right vehicle for the journey."
     >
       <div className="grid gap-8 lg:grid-cols-[360px_1fr]">
         <aside className="space-y-6">
@@ -202,7 +202,7 @@ function TripDistanceControls({
           <p className="text-ink/60">Estimated route KM</p>
           <p className="mt-1 text-lg font-semibold">{routeKm > 0 ? formatKm(routeKm) : "Not available yet"}</p>
           <p className="mt-1 text-ink/60">
-            {trip.routeKm ? "Using Google Maps route distance." : "Enter estimated KM below if Maps is unavailable."}
+            {trip.routeKm ? "Route distance calculated." : "Enter estimated KM below if you want to adjust the distance."}
           </p>
         </div>
 
