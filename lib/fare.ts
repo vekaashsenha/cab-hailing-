@@ -1,4 +1,10 @@
-import type { CarOption, RideType, TripDraft } from "@/lib/booking";
+import {
+  getDailyRentalPackage,
+  type CarOption,
+  type DailyRentalPackage,
+  type RideType,
+  type TripDraft
+} from "@/lib/booking";
 
 export type DistanceSource = "maps" | "manual" | "missing";
 
@@ -7,6 +13,9 @@ export type FareBreakup = {
   serviceType: string;
   vehicleType: string;
   routeKm: number;
+  operationalBufferKm: number;
+  dailyRentalPackage: DailyRentalPackage | null;
+  packageBaseKm: number;
   billableKm: number;
   minimumKm: number;
   ratePerKm: number;
@@ -29,7 +38,7 @@ export type FareRow = {
   emphasis?: boolean;
 };
 
-const WITHIN_CITY_BUFFER_KM = 15;
+export const WITHIN_CITY_OPERATIONAL_BUFFER_KM = 15;
 const OUTSTATION_MINIMUM_KM_PER_DAY = 250;
 const DRIVER_BATA_PER_DAY = 500;
 const DRIVER_BATA_PER_NIGHT = 300;
@@ -38,6 +47,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export function calculateFareBreakup(trip: TripDraft, car: CarOption): FareBreakup {
   const routeKm = getFareRouteKm(trip);
   const distanceSource = getDistanceSource(trip);
+  const isDailyRental = trip.rideType === "Within City";
+  const dailyRentalPackage = isDailyRental ? getDailyRentalPackage(trip.dailyRentalPackageId) : null;
+  const operationalBufferKm = isDailyRental ? WITHIN_CITY_OPERATIONAL_BUFFER_KM : 0;
+  const packageBaseKm = dailyRentalPackage?.baseKm ?? 0;
   const calendarDays = trip.rideType === "Outstation" ? getOutstationCalendarDays(trip) : 0;
   const nights = trip.rideType === "Outstation" ? getOutstationNights(trip) : 0;
   const minimumKm = trip.rideType === "Outstation" && calendarDays > 0
@@ -45,15 +58,15 @@ export function calculateFareBreakup(trip: TripDraft, car: CarOption): FareBreak
     : 0;
   const hasDistance = routeKm > 0;
   const hasValidOutstationDates = trip.rideType !== "Outstation" || calendarDays > 0;
-  const canCalculateFare = hasDistance && hasValidOutstationDates;
+  const canCalculateFare = isDailyRental || (hasDistance && hasValidOutstationDates);
 
   let billableKm = 0;
   let driverBata = 0;
   let nightCharge = 0;
 
   if (canCalculateFare) {
-    if (trip.rideType === "Within City") {
-      billableKm = roundKm(routeKm + WITHIN_CITY_BUFFER_KM);
+    if (isDailyRental) {
+      billableKm = getDailyRentalBillableKm(trip);
     } else if (trip.rideType === "Outstation") {
       billableKm = roundKm(Math.max(routeKm, minimumKm));
       driverBata = DRIVER_BATA_PER_DAY * calendarDays;
@@ -71,6 +84,9 @@ export function calculateFareBreakup(trip: TripDraft, car: CarOption): FareBreak
     serviceType: getServiceTypeLabel(trip.rideType),
     vehicleType: car.name,
     routeKm,
+    operationalBufferKm,
+    dailyRentalPackage,
+    packageBaseKm,
     billableKm,
     minimumKm,
     ratePerKm: car.ratePerKm,
@@ -100,6 +116,42 @@ export function getFareBreakupRows(breakup: FareBreakup): FareRow[] {
     }
   ];
 
+  if (breakup.rideType === "Within City" && breakup.dailyRentalPackage) {
+    rows.push(
+      {
+        label: "Daily Rental Package",
+        value: breakup.dailyRentalPackage.label
+      },
+      {
+        label: "Route Distance",
+        value: breakup.hasDistance ? formatKm(breakup.routeKm) : "To be calculated"
+      },
+      {
+        label: "Operational Buffer",
+        value: formatKm(breakup.operationalBufferKm)
+      },
+      {
+        label: "Billable KM",
+        value: formatKm(breakup.billableKm)
+      },
+      {
+        label: "Rate per KM",
+        value: `${formatCurrency(breakup.ratePerKm)} / KM`
+      },
+      {
+        label: "Estimated Fare",
+        value: formatCurrency(breakup.totalFare),
+        emphasis: true
+      },
+      {
+        label: "Note",
+        value: breakup.note
+      }
+    );
+
+    return rows;
+  }
+
   if (breakup.rideType === "Outstation") {
     rows.push(
       {
@@ -119,8 +171,8 @@ export function getFareBreakupRows(breakup: FareBreakup): FareRow[] {
 
   rows.push(
     {
-      label: "Route KM",
-      value: breakup.hasDistance ? `${formatKm(breakup.routeKm)} (${formatDistanceSource(breakup.distanceSource)})` : "Needed"
+      label: "Route Distance",
+      value: breakup.hasDistance ? formatKm(breakup.routeKm) : "Needed"
     },
     {
       label: "Billable KM",
@@ -151,7 +203,7 @@ export function getFareBreakupRows(breakup: FareBreakup): FareRow[] {
 
   rows.push(
     {
-      label: "Total estimated fare",
+      label: "Estimated Fare",
       value: breakup.canCalculateFare ? formatCurrency(breakup.totalFare) : getMissingFareMessage(breakup),
       emphasis: true
     },
@@ -166,6 +218,11 @@ export function getFareBreakupRows(breakup: FareBreakup): FareRow[] {
 
 export function getFareRouteKm(trip: TripDraft) {
   return roundKm(trip.routeKm ?? trip.manualKm ?? 0);
+}
+
+export function getDailyRentalBillableKm(trip: Pick<TripDraft, "dailyRentalPackageId">) {
+  const dailyRentalPackage = getDailyRentalPackage(trip.dailyRentalPackageId);
+  return roundKm(dailyRentalPackage.baseKm + WITHIN_CITY_OPERATIONAL_BUFFER_KM);
 }
 
 export function getTripDistanceSource(trip: TripDraft): DistanceSource {
@@ -231,19 +288,7 @@ export function getFareNote(rideType: RideType) {
 }
 
 export function getServiceTypeLabel(rideType: RideType) {
-  return rideType === "Within City" ? "Hourly / Within City" : rideType;
-}
-
-export function formatDistanceSource(source: DistanceSource) {
-  if (source === "maps") {
-    return "Route assisted";
-  }
-
-  if (source === "manual") {
-    return "Manual estimate";
-  }
-
-  return "Not available";
+  return rideType === "Within City" ? "Daily Rental / Within City" : rideType;
 }
 
 function getDistanceSource(trip: TripDraft): DistanceSource {
