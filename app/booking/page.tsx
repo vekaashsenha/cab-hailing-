@@ -4,6 +4,7 @@ import Link from "next/link";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Mail, MessageSquareText, Phone, UserRound } from "lucide-react";
+import { DailyRentalNote } from "@/components/daily-rental-note";
 import { FareBreakupCard } from "@/components/fare-breakup-card";
 import { PageShell } from "@/components/page-shell";
 import { TripSummary } from "@/components/trip-summary";
@@ -142,6 +143,12 @@ export default function BookingPage() {
               />
             </label>
           </div>
+
+          {trip?.rideType === "Within City" ? (
+            <div className="mt-5">
+              <DailyRentalNote />
+            </div>
+          ) : null}
 
           {message ? <p className="mt-5 rounded bg-ember/10 px-3 py-2 text-sm text-ember">{message}</p> : null}
 
