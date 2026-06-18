@@ -3,22 +3,21 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CalendarDays, CarFront, Clock, LocateFixed, MapPin, Search } from "lucide-react";
-import { emptyTrip, getRideTypeLabel, getTrip, rideTypes, saveTrip, type TripDraft } from "@/lib/booking";
+import {
+  dailyRentalPackages,
+  emptyTrip,
+  getRideTypeLabel,
+  getTrip,
+  rideTypes,
+  saveTrip,
+  type TripDraft
+} from "@/lib/booking";
 import { isReturnDateBeforePickup } from "@/lib/fare";
 import {
   getGoogleMapsErrorMessage,
-  getGoogleMapsFailureReason,
   loadGoogleMaps,
   updateGoogleMapsDebugState
 } from "@/lib/google-maps";
-
-type MapsAutocompleteStatus =
-  | "loading"
-  | "ready"
-  | "key-missing"
-  | "script-failed"
-  | "places-unavailable"
-  | "autocomplete-failed";
 
 export function BookingSearchForm() {
   const router = useRouter();
@@ -26,7 +25,6 @@ export function BookingSearchForm() {
   const dropoffRef = useRef<HTMLInputElement | null>(null);
   const [trip, setTrip] = useState<TripDraft>(emptyTrip);
   const [message, setMessage] = useState("");
-  const [mapsStatus, setMapsStatus] = useState<MapsAutocompleteStatus>("loading");
 
   useEffect(() => {
     const savedTrip = getTrip();
@@ -53,7 +51,6 @@ export function BookingSearchForm() {
             dropAutocompleteAttached: false,
             lastErrorMessage: "Location assistance is temporarily unavailable."
           });
-          setMapsStatus("autocomplete-failed");
           return;
         }
 
@@ -81,7 +78,6 @@ export function BookingSearchForm() {
             dropAutocompleteAttached: true,
             lastErrorMessage: ""
           });
-          setMapsStatus("ready");
         } catch (error: unknown) {
           updateGoogleMapsDebugState({
             pickupAutocompleteAttached: false,
@@ -91,7 +87,6 @@ export function BookingSearchForm() {
               "Location assistance is temporarily unavailable."
             )
           });
-          setMapsStatus("autocomplete-failed");
         }
       })
       .catch((error: unknown) => {
@@ -99,7 +94,9 @@ export function BookingSearchForm() {
           return;
         }
 
-        setMapsStatus(getGoogleMapsFailureReason(error));
+        updateGoogleMapsDebugState({
+          lastErrorMessage: getGoogleMapsErrorMessage(error)
+        });
       });
 
     return () => {
@@ -172,9 +169,6 @@ export function BookingSearchForm() {
       <div className="mb-5">
         <p className="text-sm font-semibold uppercase tracking-[0.16em] text-ember">Book your ride</p>
         <h2 className="mt-2 font-serif text-3xl font-semibold">Where should we pick you up?</h2>
-        <p className="mt-2 text-sm text-ink/60">
-          {getAutocompleteStatusMessage(mapsStatus)}
-        </p>
       </div>
 
       <div className="grid gap-4">
@@ -272,6 +266,26 @@ export function BookingSearchForm() {
             ))}
           </select>
         </label>
+
+        {trip.rideType === "Within City" ? (
+          <label className="block">
+            <span className="mb-2 flex items-center gap-2 text-sm font-semibold">
+              <Clock className="h-4 w-4 text-ember" />
+              Daily Rental Package
+            </span>
+            <select
+              value={trip.dailyRentalPackageId}
+              onChange={(event) => updateTrip("dailyRentalPackageId", event.target.value as TripDraft["dailyRentalPackageId"])}
+              className="h-12 w-full rounded border border-ink/10 bg-white px-4 outline-none transition focus:border-ember focus:ring-2 focus:ring-ember/20"
+            >
+              {dailyRentalPackages.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
       </div>
 
       {message ? <p className="mt-4 rounded bg-ember/10 px-3 py-2 text-sm text-ember">{message}</p> : null}
@@ -286,19 +300,4 @@ export function BookingSearchForm() {
       </button>
     </form>
   );
-}
-
-function getAutocompleteStatusMessage(status: MapsAutocompleteStatus) {
-  switch (status) {
-    case "ready":
-      return "Address suggestions are ready as you type.";
-    case "key-missing":
-    case "script-failed":
-    case "places-unavailable":
-    case "autocomplete-failed":
-      return "Location assistance is temporarily unavailable. You can continue by entering your address manually.";
-    case "loading":
-    default:
-      return "Preparing location assistance.";
-  }
 }
