@@ -4,11 +4,13 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CreditCard, Landmark, RotateCcw, ShieldCheck } from "lucide-react";
+import { DailyRentalNote } from "@/components/daily-rental-note";
 import { FareBreakupCard } from "@/components/fare-breakup-card";
 import { PageShell } from "@/components/page-shell";
 import { TripSummary } from "@/components/trip-summary";
 import {
   createBookingId,
+  clearBookingDraft,
   getPassenger,
   getSelectedCar,
   getTrip,
@@ -163,6 +165,7 @@ export default function PaymentPage() {
         ...booking,
         operationsEmailStatus
       });
+      clearBookingDraft();
 
       router.push("/confirmation");
     } catch (error) {
@@ -203,7 +206,7 @@ export default function PaymentPage() {
             </div>
             <div className="flex items-center gap-2 rounded bg-mist px-4 py-3 text-sm font-semibold text-ink/70">
               <Landmark className="h-5 w-5 text-ember" />
-              Razorpay test mode
+              Secure checkout
             </div>
           </div>
 
@@ -212,7 +215,7 @@ export default function PaymentPage() {
               <CreditCard className="mb-5 h-7 w-7 text-ember" />
               <span className="block text-lg font-semibold">Razorpay Checkout</span>
               <span className="mt-1 block text-sm leading-6 text-ink/60">
-                Test payment using cards, UPI, wallets, and other Razorpay test methods.
+                Pay online using cards, UPI, wallets, and other supported methods.
               </span>
             </div>
             <div className="rounded border border-ink/10 bg-mist p-5">
@@ -223,6 +226,12 @@ export default function PaymentPage() {
               </span>
             </div>
           </div>
+
+          {trip?.rideType === "Within City" ? (
+            <div className="mt-5">
+              <DailyRentalNote />
+            </div>
+          ) : null}
 
           {message ? (
             <p className="mt-5 rounded bg-ember/10 px-3 py-2 text-sm text-ember">{message}</p>
