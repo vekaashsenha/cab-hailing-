@@ -1,13 +1,11 @@
 import type { ReactNode } from "react";
 import { CalendarDays, Clock, MapPin, Route } from "lucide-react";
-import { getRideTypeLabel, type CarOption, type TripDraft } from "@/lib/booking";
+import { getDailyRentalPackage, getRideTypeLabel, type CarOption, type TripDraft } from "@/lib/booking";
 import {
-  formatDistanceSource,
   formatKm,
   getFareRouteKm,
   getOutstationCalendarDays,
-  getOutstationNights,
-  getTripDistanceSource
+  getOutstationNights
 } from "@/lib/fare";
 
 type TripSummaryProps = {
@@ -28,7 +26,7 @@ export function TripSummary({ trip, car }: TripSummaryProps) {
   }
 
   const routeKm = getFareRouteKm(trip);
-  const distanceSource = getTripDistanceSource(trip);
+  const dailyRentalPackage = getDailyRentalPackage(trip.dailyRentalPackageId);
   const calendarDays = getOutstationCalendarDays(trip);
   const nights = getOutstationNights(trip);
   const outstationDuration = calendarDays > 0
@@ -53,8 +51,11 @@ export function TripSummary({ trip, car }: TripSummaryProps) {
           ) : (
             <p className="mt-1 text-ink/70">Select a vehicle to continue.</p>
           )}
+          {trip.rideType === "Within City" ? (
+            <p className="mt-2 text-ink/70">Package: {dailyRentalPackage.label}</p>
+          ) : null}
           <p className="mt-2 text-ink/70">
-            Distance: {routeKm > 0 ? `${formatKm(routeKm)} (${formatDistanceSource(distanceSource)})` : "Awaiting route or manual KM"}
+            Distance: {routeKm > 0 ? formatKm(routeKm) : "To be calculated"}
           </p>
           {trip.rideType === "Outstation" ? (
             <p className="mt-1 text-ink/70">{outstationDuration}</p>
