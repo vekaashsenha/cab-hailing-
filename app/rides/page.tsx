@@ -4,11 +4,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Briefcase, CarFront, UsersRound } from "lucide-react";
+import { DailyRentalNote } from "@/components/daily-rental-note";
 import { PageShell } from "@/components/page-shell";
 import { RouteMap } from "@/components/route-map";
 import { TripSummary } from "@/components/trip-summary";
 import {
   carOptions,
+  dailyRentalPackages,
+  getDailyRentalPackage,
   getTrip,
   saveTrip,
   saveSelectedCar,
@@ -19,6 +22,7 @@ import {
   calculateFareBreakup,
   formatCurrency,
   formatKm,
+  getDailyRentalBillableKm,
   getFareBreakupRows,
   getFareRouteKm,
   getOutstationCalendarDays,
@@ -75,7 +79,7 @@ export default function RidesPage() {
       return;
     }
 
-    if (!breakup.hasDistance) {
+    if (!breakup.canCalculateFare) {
       setMessage("Enter estimated KM to calculate the fare before selecting a vehicle.");
       return;
     }
@@ -128,6 +132,7 @@ export default function RidesPage() {
                       </div>
                       <CarFront className="h-7 w-7 text-gold" />
                     </div>
+                    <p className="mt-3 text-sm leading-6 text-ink/70">{car.representativeVehicle}</p>
                     <p className="mt-2 text-3xl font-semibold">
                       {breakup?.canCalculateFare ? formatCurrency(breakup.totalFare) : "--"}
                     </p>
@@ -185,6 +190,8 @@ function TripDistanceControls({
   }
 
   const routeKm = getFareRouteKm(trip);
+  const dailyRentalPackage = getDailyRentalPackage(trip.dailyRentalPackageId);
+  const dailyRentalBillableKm = getDailyRentalBillableKm(trip);
   const calendarDays = getOutstationCalendarDays(trip);
   const nights = getOutstationNights(trip);
   const minimumKm = getOutstationMinimumKm(trip);
@@ -199,15 +206,12 @@ function TripDistanceControls({
       <p className="text-sm font-semibold uppercase tracking-[0.16em] text-ember">Distance and billing</p>
       <div className="mt-4 space-y-4">
         <div className="rounded bg-mist p-4 text-sm">
-          <p className="text-ink/60">Estimated route KM</p>
-          <p className="mt-1 text-lg font-semibold">{routeKm > 0 ? formatKm(routeKm) : "Not available yet"}</p>
-          <p className="mt-1 text-ink/60">
-            {trip.routeKm ? "Route distance calculated." : "Enter estimated KM below if you want to adjust the distance."}
-          </p>
+          <p className="text-ink/60">Route Distance</p>
+          <p className="mt-1 text-lg font-semibold">{routeKm > 0 ? formatKm(routeKm) : "To be calculated"}</p>
         </div>
 
         <label className="block">
-          <span className="mb-2 block text-sm font-semibold">Manual estimated KM</span>
+          <span className="mb-2 block text-sm font-semibold">Estimated KM</span>
           <input
             type="number"
             min="1"
@@ -218,6 +222,42 @@ function TripDistanceControls({
             className="h-12 w-full rounded border border-ink/10 px-4 outline-none transition focus:border-ember focus:ring-2 focus:ring-ember/20"
           />
         </label>
+
+        {trip.rideType === "Within City" ? (
+          <>
+            <label className="block">
+              <span className="mb-2 block text-sm font-semibold">Daily Rental Package</span>
+              <select
+                value={trip.dailyRentalPackageId}
+                onChange={(event) => onChange({ dailyRentalPackageId: event.target.value as TripDraft["dailyRentalPackageId"] })}
+                className="h-12 w-full rounded border border-ink/10 bg-white px-4 outline-none transition focus:border-ember focus:ring-2 focus:ring-ember/20"
+              >
+                {dailyRentalPackages.map((option) => (
+                  <option key={option.id} value={option.id}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="rounded bg-mist p-4 text-sm">
+              <dl className="grid gap-2">
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-ink/60">Package KM</dt>
+                  <dd className="font-semibold">{formatKm(dailyRentalPackage.baseKm)}</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-ink/60">Operational Buffer</dt>
+                  <dd className="font-semibold">15 KM</dd>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                  <dt className="text-ink/60">Billable KM</dt>
+                  <dd className="font-semibold">{formatKm(dailyRentalBillableKm)}</dd>
+                </div>
+              </dl>
+            </div>
+            <DailyRentalNote />
+          </>
+        ) : null}
 
         {trip.rideType === "Outstation" ? (
           <div className="rounded bg-mist p-4 text-sm">
