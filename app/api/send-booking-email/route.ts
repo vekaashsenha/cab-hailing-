@@ -178,6 +178,7 @@ function isBookingRecord(value: unknown): value is BookingRecord {
     typeof trip.returnDate === "string" &&
     typeof trip.time === "string" &&
     (trip.rideType === "Airport Transfer" || trip.rideType === "Within City" || trip.rideType === "Outstation") &&
+    (typeof trip.dailyRentalPackageId === "string" || typeof trip.dailyRentalPackageId === "undefined") &&
     isNullableNumber(trip.routeKm) &&
     isNullableNumber(trip.manualKm) &&
     isObject(car) &&
@@ -187,6 +188,7 @@ function isBookingRecord(value: unknown): value is BookingRecord {
     typeof car.luggage === "number" &&
     typeof car.ratePerKm === "number" &&
     typeof car.image === "string" &&
+    (typeof car.representativeVehicle === "string" || typeof car.representativeVehicle === "undefined") &&
     typeof car.tone === "string" &&
     isObject(passenger) &&
     typeof passenger.fullName === "string" &&
