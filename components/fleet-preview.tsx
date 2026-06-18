@@ -25,6 +25,7 @@ export function FleetPreview() {
               <div className="p-5">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-ember">{car.tone}</p>
                 <h3 className="mt-2 text-xl font-semibold">{car.name}</h3>
+                <p className="mt-2 text-sm leading-6 text-ink/70">{car.representativeVehicle}</p>
                 <div className="mt-4 flex gap-4 text-sm text-ink/70">
                   <span className="flex items-center gap-2">
                     <UsersRound className="h-4 w-4 text-gold" />
