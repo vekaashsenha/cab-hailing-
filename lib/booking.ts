@@ -1,5 +1,14 @@
 export type RideType = "Airport Transfer" | "Within City" | "Outstation";
 
+export type DailyRentalPackageId = "4hr-40km" | "8hr-80km" | "12hr-120km";
+
+export type DailyRentalPackage = {
+  id: DailyRentalPackageId;
+  label: string;
+  hours: number;
+  baseKm: number;
+};
+
 export type TripDraft = {
   pickup: string;
   dropoff: string;
@@ -7,6 +16,7 @@ export type TripDraft = {
   returnDate: string;
   time: string;
   rideType: RideType;
+  dailyRentalPackageId: DailyRentalPackageId;
   routeKm: number | null;
   manualKm: number | null;
 };
@@ -18,6 +28,7 @@ export type CarOption = {
   luggage: number;
   ratePerKm: number;
   image: string;
+  representativeVehicle: string;
   tone: string;
 };
 
@@ -59,8 +70,31 @@ const bookingKey = "cabHailing.booking";
 
 export const rideTypes: RideType[] = ["Airport Transfer", "Within City", "Outstation"];
 
+export const dailyRentalPackages: DailyRentalPackage[] = [
+  {
+    id: "4hr-40km",
+    label: "4 Hours / 40 KM",
+    hours: 4,
+    baseKm: 40
+  },
+  {
+    id: "8hr-80km",
+    label: "8 Hours / 80 KM",
+    hours: 8,
+    baseKm: 80
+  },
+  {
+    id: "12hr-120km",
+    label: "12 Hours / 120 KM",
+    hours: 12,
+    baseKm: 120
+  }
+];
+
+export const defaultDailyRentalPackageId: DailyRentalPackageId = "4hr-40km";
+
 export function getRideTypeLabel(rideType: RideType) {
-  return rideType === "Within City" ? "Hourly / Within City" : rideType;
+  return rideType === "Within City" ? "Daily Rental / Within City" : rideType;
 }
 
 export const carOptions: CarOption[] = [
@@ -70,7 +104,8 @@ export const carOptions: CarOption[] = [
     seats: 4,
     luggage: 2,
     ratePerKm: 30,
-    image: "https://images.unsplash.com/photo-1553440569-bcc63803a83d?auto=format&fit=crop&w=900&q=80",
+    image: "https://upload.wikimedia.org/wikipedia/commons/e/e7/Honda_City_1.5_i-VTEC_V_%28VIII%2C_Facelift%29_%E2%80%93_f_22032025.jpg",
+    representativeVehicle: "Representative vehicle: Honda City / Ciaz / Verna or similar",
     tone: "Reliable city and airport comfort"
   },
   {
@@ -79,7 +114,8 @@ export const carOptions: CarOption[] = [
     seats: 6,
     luggage: 4,
     ratePerKm: 40,
-    image: "https://images.unsplash.com/photo-1533473359331-0135ef1b58bf?auto=format&fit=crop&w=900&q=80",
+    image: "https://static3.toyotabharat.com/images/news/2024/feb-22/press-release-main-01-800x514.webp",
+    representativeVehicle: "Representative vehicle: Innova Hycross / XUV700 / BYD or similar",
     tone: "Family, group, and luggage friendly"
   },
   {
@@ -88,7 +124,8 @@ export const carOptions: CarOption[] = [
     seats: 4,
     luggage: 3,
     ratePerKm: 60,
-    image: "https://images.unsplash.com/photo-1542362567-b07e54358753?auto=format&fit=crop&w=900&q=80",
+    image: "https://upload.wikimedia.org/wikipedia/commons/d/db/Mercedes_s-class_w223_black_%281%29.jpg",
+    representativeVehicle: "Representative vehicle: Mercedes-Benz S-Class or similar",
     tone: "Mercedes, Audi, and executive class"
   }
 ];
@@ -100,6 +137,7 @@ export const emptyTrip: TripDraft = {
   returnDate: "",
   time: "",
   rideType: "Airport Transfer",
+  dailyRentalPackageId: defaultDailyRentalPackageId,
   routeKm: null,
   manualKm: null
 };
@@ -127,6 +165,14 @@ function writeJson<T>(key: string, value: T) {
   }
 
   window.localStorage.setItem(key, JSON.stringify(value));
+}
+
+function removeJson(key: string) {
+  if (!canUseStorage()) {
+    return;
+  }
+
+  window.localStorage.removeItem(key);
 }
 
 export function getTrip() {
@@ -171,6 +217,12 @@ export function getBooking() {
   return booking ? normalizeBooking(booking) : null;
 }
 
+export function clearBookingDraft() {
+  removeJson(tripKey);
+  removeJson(carKey);
+  removeJson(passengerKey);
+}
+
 export function createBookingId() {
   const stamp = Date.now().toString(36).toUpperCase();
   const suffix = Math.random().toString(36).slice(2, 6).toUpperCase();
@@ -206,6 +258,7 @@ function normalizeTrip(trip: Partial<TripDraft> | undefined): TripDraft {
     returnDate: typeof value.returnDate === "string" ? value.returnDate : "",
     time: typeof value.time === "string" ? value.time : "",
     rideType: isRideType(value.rideType) ? value.rideType : "Airport Transfer",
+    dailyRentalPackageId: normalizeDailyRentalPackageId(value.dailyRentalPackageId),
     routeKm: normalizeNullableKm(value.routeKm),
     manualKm: normalizeNullableKm(value.manualKm)
   };
@@ -241,6 +294,14 @@ function normalizePaymentStatus(value: unknown): PaymentStatus {
 
 function isRideType(value: unknown): value is RideType {
   return value === "Airport Transfer" || value === "Within City" || value === "Outstation";
+}
+
+export function getDailyRentalPackage(id: unknown) {
+  return dailyRentalPackages.find((option) => option.id === id) ?? dailyRentalPackages[0];
+}
+
+function normalizeDailyRentalPackageId(value: unknown): DailyRentalPackageId {
+  return getDailyRentalPackage(value).id;
 }
 
 function normalizeNullableKm(value: unknown) {
