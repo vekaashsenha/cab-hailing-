@@ -14,7 +14,6 @@ import {
   getTrip,
   savePassenger,
   type CarOption,
-  type OtpStatus,
   type PassengerDetails,
   type TripDraft
 } from "@/lib/booking";
@@ -28,19 +27,12 @@ const emptyPassenger: PassengerDetails = {
   mobileOtpStatus: "not_verified"
 };
 
-type OtpApiResponse = {
-  ok?: boolean;
-  error?: string;
-};
-
 export default function BookingPage() {
   const router = useRouter();
   const [trip, setTrip] = useState<TripDraft | null>(null);
   const [car, setCar] = useState<CarOption | null>(null);
   const [passenger, setPassenger] = useState<PassengerDetails>(emptyPassenger);
   const [message, setMessage] = useState("");
-  const [otpCode, setOtpCode] = useState("");
-  const [isOtpBusy, setIsOtpBusy] = useState(false);
 
   useEffect(() => {
     setTrip(getTrip());
@@ -49,93 +41,7 @@ export default function BookingPage() {
   }, []);
 
   function updatePassenger<K extends keyof PassengerDetails>(key: K, value: PassengerDetails[K]) {
-    setPassenger((current) => {
-      if (key === "mobile" && value !== current.mobile) {
-        return {
-          ...current,
-          mobile: value as string,
-          mobileOtpStatus: "not_verified"
-        };
-      }
-
-      return { ...current, [key]: value };
-    });
-
-    if (key === "mobile") {
-      setOtpCode("");
-    }
-  }
-
-  async function sendOtp() {
-    setMessage("");
-
-    if (!passenger.mobile.trim()) {
-      setMessage("Please enter a mobile number before requesting OTP.");
-      return;
-    }
-
-    setIsOtpBusy(true);
-
-    try {
-      const response = await fetch("/api/send-otp", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({ mobile: passenger.mobile.trim() })
-      });
-      const result = (await response.json().catch(() => null)) as OtpApiResponse | null;
-
-      if (response.ok && result?.ok) {
-        updatePassenger("mobileOtpStatus", "otp_sent");
-        setMessage("OTP sent. Please enter it to verify your mobile number.");
-        return;
-      }
-
-      setMessage(result?.error || "OTP could not be sent. Please try again.");
-    } catch {
-      setMessage("OTP could not be sent. Please try again.");
-    } finally {
-      setIsOtpBusy(false);
-    }
-  }
-
-  async function verifyOtp() {
-    setMessage("");
-
-    if (!otpCode.trim()) {
-      setMessage("Please enter the OTP to verify your mobile number.");
-      return;
-    }
-
-    setIsOtpBusy(true);
-
-    try {
-      const response = await fetch("/api/verify-otp", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          mobile: passenger.mobile.trim(),
-          otp: otpCode.trim()
-        })
-      });
-      const result = (await response.json().catch(() => null)) as OtpApiResponse | null;
-
-      if (response.ok && result?.ok) {
-        updatePassenger("mobileOtpStatus", "verified");
-        setOtpCode("");
-        setMessage("Mobile number verified.");
-        return;
-      }
-
-      setMessage(result?.error || "OTP could not be verified. Please try again.");
-    } catch {
-      setMessage("OTP could not be verified. Please try again.");
-    } finally {
-      setIsOtpBusy(false);
-    }
+    setPassenger((current) => ({ ...current, [key]: value }));
   }
 
   function submitBooking(event: FormEvent<HTMLFormElement>) {
@@ -147,23 +53,18 @@ export default function BookingPage() {
       return;
     }
 
-    if (passenger.mobileOtpStatus !== "verified") {
-      setMessage("Please verify the mobile number before continuing to payment.");
-      return;
-    }
-
     savePassenger({
       fullName: passenger.fullName.trim(),
       mobile: passenger.mobile.trim(),
       email: passenger.email.trim(),
       instruction: passenger.instruction.trim(),
-      mobileOtpStatus: passenger.mobileOtpStatus
+      mobileOtpStatus: "not_verified"
     });
     router.push("/payment");
   }
 
   const canContinue = Boolean(trip && car && calculateFareBreakup(trip, car).canCalculateFare);
-  const canProceedToPayment = canContinue && passenger.mobileOtpStatus === "verified";
+  const canProceedToPayment = canContinue;
 
   return (
     <PageShell
@@ -217,43 +118,8 @@ export default function BookingPage() {
             </label>
 
             <div className="rounded border border-ink/10 bg-mist p-4 md:col-span-2">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-semibold">Verify mobile number</p>
-                  <p className="mt-1 text-sm text-ink/60">OTP status: {formatOtpStatus(passenger.mobileOtpStatus)}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={sendOtp}
-                  disabled={!passenger.mobile.trim() || passenger.mobileOtpStatus === "verified" || isOtpBusy}
-                  className="inline-flex h-11 items-center justify-center rounded bg-ink px-4 text-sm font-semibold text-white transition hover:bg-ember disabled:cursor-not-allowed disabled:bg-ink/35"
-                >
-                  {passenger.mobileOtpStatus === "otp_sent" ? "Resend OTP" : "Verify mobile number"}
-                </button>
-              </div>
-
-              {passenger.mobileOtpStatus === "otp_sent" ? (
-                <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
-                  <input
-                    value={otpCode}
-                    onChange={(event) => setOtpCode(event.target.value)}
-                    inputMode="numeric"
-                    placeholder="Enter OTP"
-                    className="h-11 rounded border border-ink/10 bg-white px-4 outline-none transition focus:border-ember focus:ring-2 focus:ring-ember/20"
-                  />
-                  <button
-                    type="button"
-                    onClick={verifyOtp}
-                    disabled={isOtpBusy}
-                    className="inline-flex h-11 items-center justify-center rounded bg-ember px-4 text-sm font-semibold text-white transition hover:bg-ink disabled:cursor-not-allowed disabled:bg-ink/35"
-                  >
-                    Confirm OTP
-                  </button>
-                  {process.env.NODE_ENV === "development" ? (
-                    <p className="text-xs text-ink/50 sm:col-span-2">Development OTP: 123456</p>
-                  ) : null}
-                </div>
-              ) : null}
+              <p className="text-sm font-semibold">Verify mobile number</p>
+              <p className="mt-1 text-sm text-ink/60">Mobile verification will be enabled soon.</p>
             </div>
 
             <label className="block md:col-span-2">
@@ -306,16 +172,4 @@ export default function BookingPage() {
       </div>
     </PageShell>
   );
-}
-
-function formatOtpStatus(status: OtpStatus) {
-  if (status === "verified") {
-    return "Verified";
-  }
-
-  if (status === "otp_sent") {
-    return "OTP sent";
-  }
-
-  return "Not verified";
 }
