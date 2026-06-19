@@ -71,6 +71,33 @@ const carKey = "cabHailing.car";
 const passengerKey = "cabHailing.passenger";
 const bookingKey = "cabHailing.booking";
 const bookingCompletedKey = "cabHailing.bookingCompleted";
+const bookingStorageKeys = [
+  tripKey,
+  carKey,
+  passengerKey,
+  bookingKey,
+  bookingCompletedKey,
+  "cabHailing.payment",
+  "cabHailing.paymentOption",
+  "cabHailing.paymentStatus",
+  "cabHailing.fare",
+  "cabHailing.fareData",
+  "cabHailing.emailStatus",
+  "cabHailing.operationsEmailStatus",
+  "cabHailing.confirmation",
+  "cabHailing.bookingConfirmation",
+  "cabHailing.razorpay",
+  "cabHailing.razorpayPayment",
+  "cabHailing.razorpayOrder",
+  "cabHailing.razorpayPaymentId",
+  "cabHailing.razorpayOrderId",
+  "cabHailing.razorpaySignature",
+  "cabHailing.selectedVehicle",
+  "cabHailing.selectedCar",
+  "bookingCompleted"
+] as const;
+const bookingStoragePrefixes = ["cabHailing."] as const;
+export const bookingStateClearedEvent = "cabHailing:bookingStateCleared";
 
 export const rideTypes: RideType[] = ["Airport Transfer", "Within City", "Outstation"];
 
@@ -147,7 +174,33 @@ export const emptyTrip: TripDraft = {
 };
 
 function canUseStorage() {
-  return typeof window !== "undefined" && Boolean(window.localStorage);
+  try {
+    return typeof window !== "undefined" && Boolean(window.localStorage);
+  } catch {
+    return false;
+  }
+}
+
+function getStorageBuckets() {
+  if (typeof window === "undefined") {
+    return [];
+  }
+
+  const buckets: Storage[] = [];
+
+  try {
+    buckets.push(window.localStorage);
+  } catch {
+    // Ignore storage access errors so cleanup still works where possible.
+  }
+
+  try {
+    buckets.push(window.sessionStorage);
+  } catch {
+    // Ignore storage access errors so cleanup still works where possible.
+  }
+
+  return buckets;
 }
 
 function readJson<T>(key: string): T | null {
@@ -155,8 +208,16 @@ function readJson<T>(key: string): T | null {
     return null;
   }
 
+  return readStorageJson<T>(window.localStorage, key);
+}
+
+function readStorageJson<T>(storage: Storage | null, key: string): T | null {
+  if (!storage) {
+    return null;
+  }
+
   try {
-    const value = window.localStorage.getItem(key);
+    const value = storage.getItem(key);
     return value ? (JSON.parse(value) as T) : null;
   } catch {
     return null;
@@ -228,24 +289,74 @@ export function clearBookingDraft() {
   removeJson(passengerKey);
 }
 
-export function clearCompletedBookingData() {
-  clearBookingDraft();
-  removeJson(bookingKey);
+export function clearBookingState() {
+  for (const storage of getStorageBuckets()) {
+    const keysToRemove = new Set<string>(bookingStorageKeys);
+
+    for (let index = 0; index < storage.length; index += 1) {
+      const key = storage.key(index);
+
+      if (key && bookingStoragePrefixes.some((prefix) => key.startsWith(prefix))) {
+        keysToRemove.add(key);
+      }
+    }
+
+    keysToRemove.forEach((key) => {
+      try {
+        storage.removeItem(key);
+      } catch {
+        // Ignore storage access errors so cleanup never blocks the customer flow.
+      }
+    });
+  }
+
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.dispatchEvent(new Event(bookingStateClearedEvent));
+  } catch {
+    // The storage cleanup is complete even if the browser cannot dispatch the reset event.
+  }
 }
 
 export function markBookingCompleted() {
   writeJson(bookingCompletedKey, true);
+
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.sessionStorage.setItem(bookingCompletedKey, JSON.stringify(true));
+  } catch {
+    // The localStorage flag is enough; sessionStorage is only a fallback.
+  }
 }
 
 export function consumeBookingCompletedFlag() {
-  const bookingCompleted = readJson<boolean>(bookingCompletedKey) === true;
+  const bookingCompleted =
+    readJson<boolean>(bookingCompletedKey) === true ||
+    readStorageJson<boolean>(getSessionStorage(), bookingCompletedKey) === true;
 
   if (bookingCompleted) {
-    clearCompletedBookingData();
-    removeJson(bookingCompletedKey);
+    clearBookingState();
   }
 
   return bookingCompleted;
+}
+
+function getSessionStorage() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
 }
 
 export function createBookingId() {
