@@ -119,7 +119,7 @@ export default function BookingPage() {
       });
       confirmationResultRef.current = null;
       resetRecaptchaVerifier();
-      setOtpMessage("We could not send the OTP right now. You can continue booking.");
+      setOtpMessage(getOtpFailureMessage(error));
       refreshFirebaseDiagnostics();
     } finally {
       setIsSendingOtp(false);
@@ -346,13 +346,13 @@ export default function BookingPage() {
 
 function FirebaseDiagnosticsPanel({ diagnostics }: { diagnostics: FirebaseAuthDiagnostics }) {
   const rows = [
-    ["Firebase API key present", formatYesNo(diagnostics.apiKeyPresent)],
-    ["Firebase API key prefix starts with AIza", formatYesNo(diagnostics.apiKeyStartsWithAIza)],
-    ["Firebase authDomain present", formatYesNo(diagnostics.authDomainPresent)],
-    ["Firebase projectId present", formatYesNo(diagnostics.projectIdPresent)],
+    ["Firebase API key", diagnostics.maskedApiKey],
+    ["Firebase authDomain", diagnostics.authDomain],
+    ["Firebase projectId", diagnostics.projectId],
     ["Firebase appId present", formatYesNo(diagnostics.appIdPresent)],
+    ["Current browser domain", diagnostics.browserDomain],
     ["Firebase Auth initialized", formatYesNo(diagnostics.authInitialized)],
-    ["Last Firebase auth error code", diagnostics.lastAuthErrorCode || "None"]
+    ["Firebase auth error code", diagnostics.lastAuthErrorCode || "None"]
   ];
 
   return (
@@ -369,6 +369,32 @@ function FirebaseDiagnosticsPanel({ diagnostics }: { diagnostics: FirebaseAuthDi
 
 function formatYesNo(value: boolean) {
   return value ? "Yes" : "No";
+}
+
+function getOtpFailureMessage(error: unknown) {
+  const code = getFirebaseErrorCode(error);
+
+  if (code === "auth/invalid-api-key") {
+    return "Firebase API key is invalid. Please confirm the Web App config values in Vercel match the Firebase Cab-Hailing project.";
+  }
+
+  if (code === "auth/config-mismatch") {
+    return "Firebase configuration changed in this browser session. Please refresh the page before trying mobile verification again. You can continue booking.";
+  }
+
+  return "We could not send the OTP right now. You can continue booking.";
+}
+
+function getFirebaseErrorCode(error: unknown) {
+  if (isObject(error) && typeof error.code === "string") {
+    return error.code;
+  }
+
+  return "";
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function formatIndianPhoneNumber(value: string) {
