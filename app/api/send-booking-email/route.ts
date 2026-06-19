@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getRideTypeLabel, type BookingRecord, type PaymentStatus } from "@/lib/booking";
+import { getRideTypeLabel, type BookingRecord, type OtpStatus, type PaymentStatus } from "@/lib/booking";
 import { calculateFareBreakup, getFareBreakupRows } from "@/lib/fare";
 
 const RESEND_EMAILS_URL = "https://api.resend.com/emails";
@@ -107,6 +107,7 @@ function getBookingRows(booking: BookingRecord) {
     ["Booking ID", booking.bookingId],
     ["Passenger", booking.passenger.fullName],
     ["Mobile", booking.passenger.mobile],
+    ["Mobile verification", formatOtpStatus(booking.passenger.mobileOtpStatus)],
     ["Email", booking.passenger.email],
     ["Pickup", booking.trip.pickup],
     ["Drop", booking.trip.dropoff],
@@ -193,6 +194,12 @@ function isBookingRecord(value: unknown): value is BookingRecord {
     isObject(passenger) &&
     typeof passenger.fullName === "string" &&
     typeof passenger.mobile === "string" &&
+    (
+      passenger.mobileOtpStatus === "not_verified" ||
+      passenger.mobileOtpStatus === "otp_sent" ||
+      passenger.mobileOtpStatus === "verified" ||
+      typeof passenger.mobileOtpStatus === "undefined"
+    ) &&
     typeof passenger.email === "string" &&
     typeof passenger.instruction === "string" &&
     payment === "Razorpay" &&
@@ -202,6 +209,18 @@ function isBookingRecord(value: unknown): value is BookingRecord {
     typeof value.razorpaySignature === "string" &&
     typeof value.paymentErrorReason === "string"
   );
+}
+
+function formatOtpStatus(status: OtpStatus | undefined) {
+  if (status === "verified") {
+    return "Verified";
+  }
+
+  if (status === "otp_sent") {
+    return "OTP sent";
+  }
+
+  return "Not verified";
 }
 
 function isObject(value: unknown): value is Record<string, unknown> {
