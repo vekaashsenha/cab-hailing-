@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, CalendarDays, CarFront, Clock, LocateFixed, MapPin, Search } from "lucide-react";
 import {
+  bookingStateClearedEvent,
   dailyRentalPackages,
   emptyTrip,
   getRideTypeLabel,
@@ -29,15 +30,50 @@ export function BookingSearchForm() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    if (consumeBookingCompletedFlag()) {
-      setTrip(emptyTrip);
-      return;
+    function resetForm() {
+      setTrip({ ...emptyTrip });
+      setMessage("");
     }
 
-    const savedTrip = getTrip();
-    if (savedTrip) {
-      setTrip(savedTrip);
+    function resetIfBookingCompleted() {
+      if (!consumeBookingCompletedFlag()) {
+        return false;
+      }
+
+      resetForm();
+      return true;
     }
+
+    if (!resetIfBookingCompleted()) {
+      const savedTrip = getTrip();
+      setTrip(savedTrip ?? { ...emptyTrip });
+    }
+
+    function handlePageShow() {
+      resetIfBookingCompleted();
+    }
+
+    function handleFocus() {
+      resetIfBookingCompleted();
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        resetIfBookingCompleted();
+      }
+    }
+
+    window.addEventListener("pageshow", handlePageShow);
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener(bookingStateClearedEvent, resetForm);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      window.removeEventListener("pageshow", handlePageShow);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener(bookingStateClearedEvent, resetForm);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   useEffect(() => {
