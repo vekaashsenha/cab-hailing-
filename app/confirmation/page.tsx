@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { Dispatch, SetStateAction, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { ArrowRight, CheckCircle2, Mail, PhoneCall } from "lucide-react";
 import { FareBreakupCard } from "@/components/fare-breakup-card";
 import { PageShell } from "@/components/page-shell";
 import { TripSummary } from "@/components/trip-summary";
 import {
-  clearCompletedBookingData,
+  clearBookingState,
   formatMobileVerificationStatus,
   getBooking,
   markBookingCompleted,
@@ -26,11 +27,16 @@ type SendBookingEmailResponse = {
 };
 
 export default function ConfirmationPage() {
+  const router = useRouter();
   const [booking, setBooking] = useState<BookingRecord | null>(null);
   const emailRequestStarted = useRef(false);
 
   useEffect(() => {
     const storedBooking = getBooking();
+    if (!storedBooking) {
+      return;
+    }
+
     setBooking(storedBooking);
 
     if (
@@ -44,10 +50,13 @@ export default function ConfirmationPage() {
       return;
     }
 
-    if (storedBooking) {
-      completeAndClearStoredBooking();
-    }
+    completeAndClearStoredBooking();
   }, []);
+
+  function bookAnotherRide() {
+    clearBookingState();
+    router.push("/");
+  }
 
   return (
     <PageShell
@@ -105,6 +114,15 @@ export default function ConfirmationPage() {
               <PhoneCall className="h-5 w-5 flex-none text-gold" />
               <p className="text-sm text-white/80">Keep your phone reachable for driver and duty confirmation.</p>
             </div>
+
+            <button
+              type="button"
+              onClick={bookAnotherRide}
+              className="mt-5 inline-flex h-12 w-full items-center justify-center gap-2 rounded bg-ember px-5 font-semibold text-white transition hover:bg-ink"
+            >
+              Book Another Ride
+              <ArrowRight className="h-5 w-5" />
+            </button>
           </div>
         </div>
       ) : (
@@ -225,7 +243,7 @@ async function sendOperationsEmail(
 }
 
 function completeAndClearStoredBooking() {
-  clearCompletedBookingData();
+  clearBookingState();
   markBookingCompleted();
 }
 
