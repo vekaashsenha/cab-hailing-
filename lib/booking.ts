@@ -69,6 +69,7 @@ const tripKey = "cabHailing.trip";
 const carKey = "cabHailing.car";
 const passengerKey = "cabHailing.passenger";
 const bookingKey = "cabHailing.booking";
+const bookingCompletedKey = "cabHailing.bookingCompleted";
 
 export const rideTypes: RideType[] = ["Airport Transfer", "Within City", "Outstation"];
 
@@ -229,6 +230,21 @@ export function clearBookingDraft() {
 export function clearCompletedBookingData() {
   clearBookingDraft();
   removeJson(bookingKey);
+}
+
+export function markBookingCompleted() {
+  writeJson(bookingCompletedKey, true);
+}
+
+export function consumeBookingCompletedFlag() {
+  const bookingCompleted = readJson<boolean>(bookingCompletedKey) === true;
+
+  if (bookingCompleted) {
+    clearCompletedBookingData();
+    removeJson(bookingCompletedKey);
+  }
+
+  return bookingCompleted;
 }
 
 export function createBookingId() {
