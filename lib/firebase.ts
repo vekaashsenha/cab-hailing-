@@ -9,7 +9,9 @@ type FirebaseClientConfig = {
   appId: string;
 };
 
-type FirebaseCompatApp = unknown;
+type FirebaseCompatApp = {
+  options?: Partial<FirebaseClientConfig>;
+};
 
 export type FirebaseConfirmationResult = {
   confirm: (code: string) => Promise<unknown>;
@@ -51,11 +53,11 @@ type FirebaseCompatNamespace = {
 };
 
 export type FirebaseAuthDiagnostics = {
-  apiKeyPresent: boolean;
-  apiKeyStartsWithAIza: boolean;
-  authDomainPresent: boolean;
-  projectIdPresent: boolean;
+  maskedApiKey: string;
+  authDomain: string;
+  projectId: string;
   appIdPresent: boolean;
+  browserDomain: string;
   authInitialized: boolean;
   lastAuthErrorCode: string;
 };
@@ -123,14 +125,12 @@ export function resetRecaptchaVerifier() {
 }
 
 export function getFirebaseAuthDiagnostics(): FirebaseAuthDiagnostics {
-  const apiKey = firebaseConfig.apiKey.trim();
-
   return {
-    apiKeyPresent: apiKey.length > 0,
-    apiKeyStartsWithAIza: apiKey.startsWith("AIza"),
-    authDomainPresent: firebaseConfig.authDomain.trim().length > 0,
-    projectIdPresent: firebaseConfig.projectId.trim().length > 0,
+    maskedApiKey: maskApiKey(firebaseConfig.apiKey),
+    authDomain: firebaseConfig.authDomain.trim() || "Missing",
+    projectId: firebaseConfig.projectId.trim() || "Missing",
     appIdPresent: firebaseConfig.appId.trim().length > 0,
+    browserDomain: getBrowserDomain(),
     authInitialized: firebaseAuthInitialized,
     lastAuthErrorCode: lastFirebaseAuthErrorCode
   };
@@ -142,7 +142,7 @@ export function recordFirebaseAuthError(error: unknown) {
 
 async function initializeFirebaseAuth() {
   if (typeof window === "undefined" || !hasFirebaseConfig()) {
-    throw new Error("Firebase phone verification is not ready.");
+    throw createFirebaseAuthError("auth/config-missing", "Firebase phone verification is not ready.");
   }
 
   await loadFirebaseScript(firebaseAppScriptUrl);
@@ -151,15 +151,62 @@ async function initializeFirebaseAuth() {
   const firebase = window.firebase;
 
   if (!firebase?.initializeApp || !firebase.auth) {
-    throw new Error("Firebase phone verification is not ready.");
+    throw createFirebaseAuthError("auth/sdk-unavailable", "Firebase phone verification is not ready.");
   }
 
-  const app = firebase.apps?.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
+  const app = getFirebaseApp(firebase);
   const auth = firebase.auth(app);
   auth.useDeviceLanguage?.();
   firebaseAuthInitialized = true;
 
   return auth;
+}
+
+function getFirebaseApp(firebase: FirebaseCompatNamespace) {
+  const existingApp = firebase.apps?.[0];
+
+  if (!existingApp) {
+    return firebase.initializeApp(firebaseConfig);
+  }
+
+  const mismatch = getFirebaseConfigMismatch(existingApp.options);
+
+  if (mismatch) {
+    firebaseAuthInitialized = false;
+    throw createFirebaseAuthError(
+      "auth/config-mismatch",
+      `Firebase is already initialized with a different ${mismatch}. Refresh the page before trying OTP again.`
+    );
+  }
+
+  return existingApp;
+}
+
+function getFirebaseConfigMismatch(options: Partial<FirebaseClientConfig> | undefined) {
+  if (!options) {
+    return "app configuration";
+  }
+
+  const keys: Array<keyof FirebaseClientConfig> = [
+    "apiKey",
+    "authDomain",
+    "projectId",
+    "storageBucket",
+    "messagingSenderId",
+    "appId"
+  ];
+
+  return keys.find((key) => normalizeConfigValue(options[key]) !== normalizeConfigValue(firebaseConfig[key])) ?? "";
+}
+
+function normalizeConfigValue(value: unknown) {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function createFirebaseAuthError(code: string, message: string) {
+  const error = new Error(message) as Error & { code?: string };
+  error.code = code;
+  return error;
 }
 
 function getFirebaseAuthErrorCode(error: unknown) {
@@ -174,6 +221,28 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function maskApiKey(value: string) {
+  const apiKey = value.trim();
+
+  if (!apiKey) {
+    return "Missing";
+  }
+
+  if (apiKey.length <= 8) {
+    return "Present but too short";
+  }
+
+  return `${apiKey.slice(0, 4)}...${apiKey.slice(-4)}`;
+}
+
+function getBrowserDomain() {
+  if (typeof window === "undefined") {
+    return "Unavailable";
+  }
+
+  return window.location.hostname || "Unavailable";
+}
+
 function getRecaptchaVerifier(auth: FirebaseCompatAuth, containerId: string) {
   if (recaptchaVerifier) {
     return recaptchaVerifier;
@@ -182,7 +251,7 @@ function getRecaptchaVerifier(auth: FirebaseCompatAuth, containerId: string) {
   const firebase = window.firebase;
 
   if (!firebase?.auth?.RecaptchaVerifier) {
-    throw new Error("Firebase phone verification is not ready.");
+    throw createFirebaseAuthError("auth/recaptcha-unavailable", "Firebase phone verification is not ready.");
   }
 
   // Invisible reCAPTCHA keeps the form compact. If it needs to be visible later,
@@ -217,7 +286,7 @@ function loadFirebaseScript(src: string) {
 
     if (existingScript) {
       existingScript.addEventListener("load", () => resolve(), { once: true });
-      existingScript.addEventListener("error", () => reject(new Error("Firebase SDK could not load.")), {
+      existingScript.addEventListener("error", () => reject(createFirebaseAuthError("auth/sdk-load-failed", "Firebase SDK could not load.")), {
         once: true
       });
       return;
@@ -231,7 +300,7 @@ function loadFirebaseScript(src: string) {
       script.dataset.loaded = "true";
       resolve();
     };
-    script.onerror = () => reject(new Error("Firebase SDK could not load."));
+    script.onerror = () => reject(createFirebaseAuthError("auth/sdk-load-failed", "Firebase SDK could not load."));
     document.head.appendChild(script);
   });
 
