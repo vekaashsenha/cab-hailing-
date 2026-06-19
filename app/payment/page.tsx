@@ -173,7 +173,7 @@ export default function PaymentPage() {
   }
 
   const amount = trip && car ? calculateFareBreakup(trip, car).totalFare : 0;
-  const canPay = Boolean(trip && car && passenger && passenger.mobileOtpStatus === "verified" && amount > 0);
+  const canPay = Boolean(trip && car && passenger && amount > 0);
 
   return (
     <PageShell
