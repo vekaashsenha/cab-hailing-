@@ -6,7 +6,13 @@ import { ArrowRight, CheckCircle2, Mail, PhoneCall } from "lucide-react";
 import { FareBreakupCard } from "@/components/fare-breakup-card";
 import { PageShell } from "@/components/page-shell";
 import { TripSummary } from "@/components/trip-summary";
-import { clearCompletedBookingData, getBooking, type BookingRecord, type OperationsEmailStatus } from "@/lib/booking";
+import {
+  clearCompletedBookingData,
+  getBooking,
+  markBookingCompleted,
+  type BookingRecord,
+  type OperationsEmailStatus
+} from "@/lib/booking";
 import { calculateFareBreakup, formatCurrency } from "@/lib/fare";
 
 const PENDING_EMAIL_MESSAGE = "Reservation notification is being sent.";
@@ -38,7 +44,7 @@ export default function ConfirmationPage() {
     }
 
     if (storedBooking) {
-      clearCompletedBookingData();
+      completeAndClearStoredBooking();
     }
   }, []);
 
@@ -72,7 +78,6 @@ export default function ConfirmationPage() {
             <div className="mt-8 grid gap-4 border-t border-ink/10 pt-6 md:grid-cols-2">
               <Detail label="Passenger" value={booking.passenger.fullName} />
               <Detail label="Mobile" value={booking.passenger.mobile} />
-              <Detail label="Mobile verification" value={formatOtpStatus(booking.passenger.mobileOtpStatus)} />
               <Detail label="Email" value={booking.passenger.email} />
               <Detail label="Vehicle" value={booking.car.name} />
               <Detail label="Payment method" value={booking.payment} />
@@ -213,8 +218,13 @@ async function sendOperationsEmail(
 
     setBooking(updatedBooking);
   } finally {
-    clearCompletedBookingData();
+    completeAndClearStoredBooking();
   }
+}
+
+function completeAndClearStoredBooking() {
+  clearCompletedBookingData();
+  markBookingCompleted();
 }
 
 async function readEmailResponse(response: Response): Promise<SendBookingEmailResponse | null> {
@@ -289,18 +299,6 @@ function formatPaymentStatus(status: BookingRecord["paymentStatus"]) {
   }
 
   return "Pending";
-}
-
-function formatOtpStatus(status: BookingRecord["passenger"]["mobileOtpStatus"]) {
-  if (status === "verified") {
-    return "Verified";
-  }
-
-  if (status === "otp_sent") {
-    return "OTP sent";
-  }
-
-  return "Not verified";
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
