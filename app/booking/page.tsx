@@ -18,6 +18,7 @@ import {
   type TripDraft
 } from "@/lib/booking";
 import { calculateFareBreakup } from "@/lib/fare";
+import { prepareFirebasePhoneAuth } from "@/lib/firebase-client";
 
 const emptyPassenger: PassengerDetails = {
   fullName: "",
@@ -35,6 +36,7 @@ export default function BookingPage() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    void prepareFirebasePhoneAuth();
     setTrip(getTrip());
     setCar(getSelectedCar());
     setPassenger(getPassenger() ?? emptyPassenger);
