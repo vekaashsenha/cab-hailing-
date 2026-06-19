@@ -10,7 +10,6 @@ import { PageShell } from "@/components/page-shell";
 import { TripSummary } from "@/components/trip-summary";
 import {
   createBookingId,
-  clearBookingDraft,
   getPassenger,
   getSelectedCar,
   getTrip,
@@ -165,7 +164,6 @@ export default function PaymentPage() {
         ...booking,
         operationsEmailStatus
       });
-      clearBookingDraft();
 
       router.push("/confirmation");
     } catch (error) {
@@ -175,13 +173,13 @@ export default function PaymentPage() {
   }
 
   const amount = trip && car ? calculateFareBreakup(trip, car).totalFare : 0;
-  const canPay = Boolean(trip && car && passenger && amount > 0);
+  const canPay = Boolean(trip && car && passenger && passenger.mobileOtpStatus === "verified" && amount > 0);
 
   return (
     <PageShell
-      eyebrow="Secure test payment"
+      eyebrow="Secure payment"
       title="Pay with Razorpay"
-      copy="Complete the test checkout to confirm your chauffeur booking."
+      copy="Complete checkout to confirm your chauffeur booking."
     >
       <div className="grid gap-8 lg:grid-cols-[360px_1fr]">
         <aside className="space-y-6">
