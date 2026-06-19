@@ -53,8 +53,12 @@ type FirebaseCompatNamespace = {
 };
 
 export type FirebaseAuthDiagnostics = {
+  apiKeyPresent: boolean;
+  apiKeyStartsWithAIza: boolean;
   maskedApiKey: string;
+  authDomainPresent: boolean;
   authDomain: string;
+  projectIdPresent: boolean;
   projectId: string;
   appIdPresent: boolean;
   browserDomain: string;
@@ -125,10 +129,18 @@ export function resetRecaptchaVerifier() {
 }
 
 export function getFirebaseAuthDiagnostics(): FirebaseAuthDiagnostics {
+  const apiKey = firebaseConfig.apiKey.trim();
+  const authDomain = firebaseConfig.authDomain.trim();
+  const projectId = firebaseConfig.projectId.trim();
+
   return {
-    maskedApiKey: maskApiKey(firebaseConfig.apiKey),
-    authDomain: firebaseConfig.authDomain.trim() || "Missing",
-    projectId: firebaseConfig.projectId.trim() || "Missing",
+    apiKeyPresent: apiKey.length > 0,
+    apiKeyStartsWithAIza: apiKey.startsWith("AIza"),
+    maskedApiKey: maskApiKey(apiKey),
+    authDomainPresent: authDomain.length > 0,
+    authDomain: authDomain || "Missing",
+    projectIdPresent: projectId.length > 0,
+    projectId: projectId || "Missing",
     appIdPresent: firebaseConfig.appId.trim().length > 0,
     browserDomain: getBrowserDomain(),
     authInitialized: firebaseAuthInitialized,
