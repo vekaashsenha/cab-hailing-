@@ -8,6 +8,7 @@ import { PageShell } from "@/components/page-shell";
 import { TripSummary } from "@/components/trip-summary";
 import {
   clearCompletedBookingData,
+  formatMobileVerificationStatus,
   getBooking,
   markBookingCompleted,
   type BookingRecord,
@@ -78,6 +79,7 @@ export default function ConfirmationPage() {
             <div className="mt-8 grid gap-4 border-t border-ink/10 pt-6 md:grid-cols-2">
               <Detail label="Passenger" value={booking.passenger.fullName} />
               <Detail label="Mobile" value={booking.passenger.mobile} />
+              <Detail label="Mobile verification" value={formatMobileVerificationStatus(booking.passenger)} />
               <Detail label="Email" value={booking.passenger.email} />
               <Detail label="Vehicle" value={booking.car.name} />
               <Detail label="Payment method" value={booking.payment} />
