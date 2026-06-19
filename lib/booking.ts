@@ -37,10 +37,12 @@ export type PassengerDetails = {
   mobile: string;
   email: string;
   instruction: string;
+  mobileOtpStatus: OtpStatus;
 };
 
 export type PaymentOption = "Razorpay";
 export type PaymentStatus = "pending" | "paid" | "failed";
+export type OtpStatus = "not_verified" | "otp_sent" | "verified";
 
 export type OperationsEmailStatus = {
   attempted: boolean;
@@ -194,7 +196,8 @@ export function saveSelectedCar(car: CarOption) {
 }
 
 export function getPassenger() {
-  return readJson<PassengerDetails>(passengerKey);
+  const passenger = readJson<Partial<PassengerDetails>>(passengerKey);
+  return passenger ? normalizePassenger(passenger) : null;
 }
 
 export function savePassenger(passenger: PassengerDetails) {
@@ -221,6 +224,11 @@ export function clearBookingDraft() {
   removeJson(tripKey);
   removeJson(carKey);
   removeJson(passengerKey);
+}
+
+export function clearCompletedBookingData() {
+  clearBookingDraft();
+  removeJson(bookingKey);
 }
 
 export function createBookingId() {
@@ -284,12 +292,17 @@ function normalizePassenger(passenger: Partial<PassengerDetails> | undefined): P
     fullName: typeof passenger?.fullName === "string" ? passenger.fullName : "",
     mobile: typeof passenger?.mobile === "string" ? passenger.mobile : "",
     email: typeof passenger?.email === "string" ? passenger.email : "",
-    instruction: typeof passenger?.instruction === "string" ? passenger.instruction : ""
+    instruction: typeof passenger?.instruction === "string" ? passenger.instruction : "",
+    mobileOtpStatus: normalizeOtpStatus(passenger?.mobileOtpStatus)
   };
 }
 
 function normalizePaymentStatus(value: unknown): PaymentStatus {
   return value === "paid" || value === "failed" ? value : "pending";
+}
+
+function normalizeOtpStatus(value: unknown): OtpStatus {
+  return value === "otp_sent" || value === "verified" ? value : "not_verified";
 }
 
 function isRideType(value: unknown): value is RideType {
