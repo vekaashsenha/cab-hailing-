@@ -12,6 +12,7 @@ import {
   saveTrip,
   type TripDraft
 } from "@/lib/booking";
+import { hasAirportEndpoint } from "@/lib/airport";
 import { isReturnDateBeforePickup } from "@/lib/fare";
 import {
   getGoogleMapsErrorMessage,
@@ -140,6 +141,13 @@ export function BookingSearchForm() {
 
     if (!trip.pickup.trim() || !trip.dropoff.trim() || !trip.date || !trip.time) {
       setMessage("Please enter pickup, drop, date, and time to search rides.");
+      return;
+    }
+
+    if (trip.rideType === "Airport Transfer" && !hasAirportEndpoint(trip.pickup, trip.dropoff)) {
+      setMessage(
+        "Airport Transfer requires either pickup or drop location to be an airport. Please enter an airport location to continue."
+      );
       return;
     }
 
