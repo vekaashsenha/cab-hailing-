@@ -50,6 +50,16 @@ type FirebaseCompatNamespace = {
   auth: FirebaseCompatAuthFactory;
 };
 
+export type FirebaseAuthDiagnostics = {
+  apiKeyPresent: boolean;
+  apiKeyStartsWithAIza: boolean;
+  authDomainPresent: boolean;
+  projectIdPresent: boolean;
+  appIdPresent: boolean;
+  authInitialized: boolean;
+  lastAuthErrorCode: string;
+};
+
 declare global {
   interface Window {
     firebase?: FirebaseCompatNamespace;
@@ -71,6 +81,8 @@ export const firebaseConfig: FirebaseClientConfig = {
 let authPromise: Promise<FirebaseCompatAuth> | null = null;
 let recaptchaVerifier: FirebaseRecaptchaVerifier | null = null;
 const scriptLoads = new Map<string, Promise<void>>();
+let firebaseAuthInitialized = false;
+let lastFirebaseAuthErrorCode = "";
 
 export function hasFirebaseConfig() {
   return Object.values(firebaseConfig).every((value) => value.trim().length > 0);
@@ -90,17 +102,42 @@ export async function getFirebaseAuth() {
 }
 
 export async function signInWithPhoneNumber(phoneNumber: string, containerId: string) {
-  const auth = await getFirebaseAuth();
-  const verifier = getRecaptchaVerifier(auth, containerId);
+  try {
+    const auth = await getFirebaseAuth();
+    const verifier = getRecaptchaVerifier(auth, containerId);
 
-  // This is the real Firebase Phone Auth entry point. OTP is optional in the
-  // booking flow for now; once rollout is complete, gate payment on verification.
-  return auth.signInWithPhoneNumber(phoneNumber, verifier);
+    // This is the real Firebase Phone Auth entry point. OTP is optional in the
+    // booking flow for now; once rollout is complete, gate payment on verification.
+    const result = await auth.signInWithPhoneNumber(phoneNumber, verifier);
+    lastFirebaseAuthErrorCode = "";
+    return result;
+  } catch (error) {
+    recordFirebaseAuthError(error);
+    throw error;
+  }
 }
 
 export function resetRecaptchaVerifier() {
   recaptchaVerifier?.clear?.();
   recaptchaVerifier = null;
+}
+
+export function getFirebaseAuthDiagnostics(): FirebaseAuthDiagnostics {
+  const apiKey = firebaseConfig.apiKey.trim();
+
+  return {
+    apiKeyPresent: apiKey.length > 0,
+    apiKeyStartsWithAIza: apiKey.startsWith("AIza"),
+    authDomainPresent: firebaseConfig.authDomain.trim().length > 0,
+    projectIdPresent: firebaseConfig.projectId.trim().length > 0,
+    appIdPresent: firebaseConfig.appId.trim().length > 0,
+    authInitialized: firebaseAuthInitialized,
+    lastAuthErrorCode: lastFirebaseAuthErrorCode
+  };
+}
+
+export function recordFirebaseAuthError(error: unknown) {
+  lastFirebaseAuthErrorCode = getFirebaseAuthErrorCode(error);
 }
 
 async function initializeFirebaseAuth() {
@@ -120,8 +157,21 @@ async function initializeFirebaseAuth() {
   const app = firebase.apps?.length ? firebase.app() : firebase.initializeApp(firebaseConfig);
   const auth = firebase.auth(app);
   auth.useDeviceLanguage?.();
+  firebaseAuthInitialized = true;
 
   return auth;
+}
+
+function getFirebaseAuthErrorCode(error: unknown) {
+  if (isObject(error) && typeof error.code === "string") {
+    return error.code.slice(0, 120);
+  }
+
+  return "unknown";
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function getRecaptchaVerifier(auth: FirebaseCompatAuth, containerId: string) {
