@@ -20,8 +20,11 @@ import {
 } from "@/lib/booking";
 import { calculateFareBreakup } from "@/lib/fare";
 import {
+  getFirebaseAuthDiagnostics,
+  recordFirebaseAuthError,
   resetRecaptchaVerifier,
   signInWithPhoneNumber,
+  type FirebaseAuthDiagnostics,
   type FirebaseConfirmationResult
 } from "@/lib/firebase";
 
@@ -44,6 +47,9 @@ export default function BookingPage() {
   const [message, setMessage] = useState("");
   const [otpCode, setOtpCode] = useState("");
   const [otpMessage, setOtpMessage] = useState("");
+  const [firebaseDiagnostics, setFirebaseDiagnostics] = useState<FirebaseAuthDiagnostics>(() =>
+    getFirebaseAuthDiagnostics()
+  );
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const confirmationResultRef = useRef<FirebaseConfirmationResult | null>(null);
@@ -52,9 +58,14 @@ export default function BookingPage() {
     setTrip(getTrip());
     setCar(getSelectedCar());
     setPassenger(getPassenger() ?? emptyPassenger);
+    refreshFirebaseDiagnostics();
 
     return () => resetRecaptchaVerifier();
   }, []);
+
+  function refreshFirebaseDiagnostics() {
+    setFirebaseDiagnostics(getFirebaseAuthDiagnostics());
+  }
 
   function updatePassenger<K extends keyof PassengerDetails>(key: K, value: PassengerDetails[K]) {
     setPassenger((current) => {
@@ -88,6 +99,7 @@ export default function BookingPage() {
     }
 
     setIsSendingOtp(true);
+    refreshFirebaseDiagnostics();
 
     try {
       const confirmationResult = await signInWithPhoneNumber(formattedPhoneNumber, recaptchaContainerId);
@@ -99,13 +111,16 @@ export default function BookingPage() {
         mobileVerified: false
       }));
       setOtpMessage("OTP sent. Please enter the code to verify your mobile number.");
+      refreshFirebaseDiagnostics();
     } catch (error) {
+      recordFirebaseAuthError(error);
       console.warn("Firebase phone OTP could not be sent.", {
         error: getSafeOtpConsoleMessage(error)
       });
       confirmationResultRef.current = null;
       resetRecaptchaVerifier();
       setOtpMessage("We could not send the OTP right now. You can continue booking.");
+      refreshFirebaseDiagnostics();
     } finally {
       setIsSendingOtp(false);
     }
@@ -137,11 +152,14 @@ export default function BookingPage() {
       setOtpCode("");
       setOtpMessage("Mobile verified.");
       resetRecaptchaVerifier();
+      refreshFirebaseDiagnostics();
     } catch (error) {
+      recordFirebaseAuthError(error);
       console.warn("Firebase phone OTP could not be verified.", {
         error: getSafeOtpConsoleMessage(error)
       });
       setOtpMessage("The OTP could not be verified. Please check the code and try again, or continue booking.");
+      refreshFirebaseDiagnostics();
     } finally {
       setIsVerifyingOtp(false);
     }
@@ -271,6 +289,7 @@ export default function BookingPage() {
                 Mobile verification is currently in testing and will be made mandatory soon.
               </p>
               {otpMessage ? <p className="mt-3 rounded bg-white px-3 py-2 text-sm text-ink/70">{otpMessage}</p> : null}
+              <FirebaseDiagnosticsPanel diagnostics={firebaseDiagnostics} />
             </div>
 
             <label className="block md:col-span-2">
@@ -323,6 +342,33 @@ export default function BookingPage() {
       </div>
     </PageShell>
   );
+}
+
+function FirebaseDiagnosticsPanel({ diagnostics }: { diagnostics: FirebaseAuthDiagnostics }) {
+  const rows = [
+    ["Firebase API key present", formatYesNo(diagnostics.apiKeyPresent)],
+    ["Firebase API key prefix starts with AIza", formatYesNo(diagnostics.apiKeyStartsWithAIza)],
+    ["Firebase authDomain present", formatYesNo(diagnostics.authDomainPresent)],
+    ["Firebase projectId present", formatYesNo(diagnostics.projectIdPresent)],
+    ["Firebase appId present", formatYesNo(diagnostics.appIdPresent)],
+    ["Firebase Auth initialized", formatYesNo(diagnostics.authInitialized)],
+    ["Last Firebase auth error code", diagnostics.lastAuthErrorCode || "None"]
+  ];
+
+  return (
+    <dl className="mt-4 grid gap-2 rounded bg-white p-3 text-sm">
+      {rows.map(([label, value]) => (
+        <div key={label} className="flex items-start justify-between gap-4">
+          <dt className="text-ink/60">{label}</dt>
+          <dd className="text-right font-semibold text-ink">{value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function formatYesNo(value: boolean) {
+  return value ? "Yes" : "No";
 }
 
 function formatIndianPhoneNumber(value: string) {
