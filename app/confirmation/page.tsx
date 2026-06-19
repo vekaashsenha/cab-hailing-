@@ -6,7 +6,7 @@ import { ArrowRight, CheckCircle2, Mail, PhoneCall } from "lucide-react";
 import { FareBreakupCard } from "@/components/fare-breakup-card";
 import { PageShell } from "@/components/page-shell";
 import { TripSummary } from "@/components/trip-summary";
-import { getBooking, saveBooking, type BookingRecord, type OperationsEmailStatus } from "@/lib/booking";
+import { clearCompletedBookingData, getBooking, type BookingRecord, type OperationsEmailStatus } from "@/lib/booking";
 import { calculateFareBreakup, formatCurrency } from "@/lib/fare";
 
 const PENDING_EMAIL_MESSAGE = "Reservation notification is being sent.";
@@ -34,6 +34,11 @@ export default function ConfirmationPage() {
     ) {
       emailRequestStarted.current = true;
       void sendOperationsEmail(storedBooking, setBooking);
+      return;
+    }
+
+    if (storedBooking) {
+      clearCompletedBookingData();
     }
   }, []);
 
@@ -67,6 +72,7 @@ export default function ConfirmationPage() {
             <div className="mt-8 grid gap-4 border-t border-ink/10 pt-6 md:grid-cols-2">
               <Detail label="Passenger" value={booking.passenger.fullName} />
               <Detail label="Mobile" value={booking.passenger.mobile} />
+              <Detail label="Mobile verification" value={formatOtpStatus(booking.passenger.mobileOtpStatus)} />
               <Detail label="Email" value={booking.passenger.email} />
               <Detail label="Vehicle" value={booking.car.name} />
               <Detail label="Payment method" value={booking.payment} />
@@ -175,7 +181,6 @@ async function sendOperationsEmail(
     }
   };
 
-  saveBooking(pendingBooking);
   setBooking(pendingBooking);
 
   try {
@@ -193,7 +198,6 @@ async function sendOperationsEmail(
       operationsEmailStatus
     };
 
-    saveBooking(updatedBooking);
     setBooking(updatedBooking);
   } catch (error) {
     console.error("Booking email notification failed.", error);
@@ -207,8 +211,9 @@ async function sendOperationsEmail(
       }
     };
 
-    saveBooking(updatedBooking);
     setBooking(updatedBooking);
+  } finally {
+    clearCompletedBookingData();
   }
 }
 
@@ -284,6 +289,18 @@ function formatPaymentStatus(status: BookingRecord["paymentStatus"]) {
   }
 
   return "Pending";
+}
+
+function formatOtpStatus(status: BookingRecord["passenger"]["mobileOtpStatus"]) {
+  if (status === "verified") {
+    return "Verified";
+  }
+
+  if (status === "otp_sent") {
+    return "OTP sent";
+  }
+
+  return "Not verified";
 }
 
 function Detail({ label, value }: { label: string; value: string }) {
