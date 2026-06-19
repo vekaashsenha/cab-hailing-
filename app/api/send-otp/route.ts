@@ -12,11 +12,10 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Please enter a valid mobile number." }, { status: 400 });
   }
 
-  if (process.env.NODE_ENV === "development") {
-    return NextResponse.json({ ok: true, status: "sent" });
-  }
-
-  return NextResponse.json({ ok: false, error: "OTP provider is not configured yet." }, { status: 501 });
+  return NextResponse.json(
+    { ok: false, error: "Mobile verification is handled securely on the booking page." },
+    { status: 501 }
+  );
 }
 
 async function readRequest(request: Request): Promise<SendOtpRequest | null> {
