@@ -10,6 +10,7 @@ import { PageShell } from "@/components/page-shell";
 import { TripSummary } from "@/components/trip-summary";
 import {
   createBookingId,
+  formatMobileVerificationStatus,
   getPassenger,
   getSelectedCar,
   getTrip,
@@ -207,6 +208,13 @@ export default function PaymentPage() {
               Secure checkout
             </div>
           </div>
+
+          {passenger ? (
+            <div className="mb-6 flex items-center justify-between gap-4 rounded bg-mist px-4 py-3 text-sm">
+              <span className="text-ink/60">Mobile verification</span>
+              <span className="font-semibold text-ink">{formatMobileVerificationStatus(passenger)}</span>
+            </div>
+          ) : null}
 
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded border border-ink/10 bg-mist p-5">
