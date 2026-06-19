@@ -38,6 +38,7 @@ export type PassengerDetails = {
   email: string;
   instruction: string;
   mobileOtpStatus: OtpStatus;
+  mobileVerified: boolean;
 };
 
 export type PaymentOption = "Razorpay";
@@ -304,12 +305,16 @@ function normalizeCar(car: Partial<CarOption> | null) {
 }
 
 function normalizePassenger(passenger: Partial<PassengerDetails> | undefined): PassengerDetails {
+  const mobileOtpStatus = normalizeOtpStatus(passenger?.mobileOtpStatus);
+  const mobileVerified = passenger?.mobileVerified === true || mobileOtpStatus === "verified";
+
   return {
     fullName: typeof passenger?.fullName === "string" ? passenger.fullName : "",
     mobile: typeof passenger?.mobile === "string" ? passenger.mobile : "",
     email: typeof passenger?.email === "string" ? passenger.email : "",
     instruction: typeof passenger?.instruction === "string" ? passenger.instruction : "",
-    mobileOtpStatus: normalizeOtpStatus(passenger?.mobileOtpStatus)
+    mobileOtpStatus: mobileVerified ? "verified" : mobileOtpStatus,
+    mobileVerified
   };
 }
 
@@ -319,6 +324,10 @@ function normalizePaymentStatus(value: unknown): PaymentStatus {
 
 function normalizeOtpStatus(value: unknown): OtpStatus {
   return value === "otp_sent" || value === "verified" ? value : "not_verified";
+}
+
+export function formatMobileVerificationStatus(passenger: Pick<PassengerDetails, "mobileOtpStatus" | "mobileVerified">) {
+  return passenger.mobileVerified || passenger.mobileOtpStatus === "verified" ? "Verified" : "Not verified";
 }
 
 function isRideType(value: unknown): value is RideType {
