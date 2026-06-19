@@ -8,6 +8,7 @@ import {
   emptyTrip,
   getRideTypeLabel,
   getTrip,
+  consumeBookingCompletedFlag,
   rideTypes,
   saveTrip,
   type TripDraft
@@ -28,6 +29,11 @@ export function BookingSearchForm() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    if (consumeBookingCompletedFlag()) {
+      setTrip(emptyTrip);
+      return;
+    }
+
     const savedTrip = getTrip();
     if (savedTrip) {
       setTrip(savedTrip);
