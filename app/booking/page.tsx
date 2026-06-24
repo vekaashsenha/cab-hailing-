@@ -1,15 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRight, CheckCircle2, Mail, MessageSquareText, Phone, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowRight, Mail, MessageSquareText, Phone, UserRound } from "lucide-react";
 import { DailyRentalNote } from "@/components/daily-rental-note";
 import { FareBreakupCard } from "@/components/fare-breakup-card";
 import { PageShell } from "@/components/page-shell";
 import { TripSummary } from "@/components/trip-summary";
 import {
-  formatMobileVerificationStatus,
   getPassenger,
   getSelectedCar,
   getTrip,
@@ -19,16 +18,6 @@ import {
   type TripDraft
 } from "@/lib/booking";
 import { calculateFareBreakup } from "@/lib/fare";
-import {
-  getFirebaseAuthDiagnostics,
-  recordFirebaseAuthError,
-  resetRecaptchaVerifier,
-  signInWithPhoneNumber,
-  type FirebaseAuthDiagnostics,
-  type FirebaseConfirmationResult
-} from "@/lib/firebase";
-
-const recaptchaContainerId = "firebase-phone-recaptcha";
 
 const emptyPassenger: PassengerDetails = {
   fullName: "",
@@ -45,27 +34,12 @@ export default function BookingPage() {
   const [car, setCar] = useState<CarOption | null>(null);
   const [passenger, setPassenger] = useState<PassengerDetails>(emptyPassenger);
   const [message, setMessage] = useState("");
-  const [otpCode, setOtpCode] = useState("");
-  const [otpMessage, setOtpMessage] = useState("");
-  const [firebaseDiagnostics, setFirebaseDiagnostics] = useState<FirebaseAuthDiagnostics>(() =>
-    getFirebaseAuthDiagnostics()
-  );
-  const [isSendingOtp, setIsSendingOtp] = useState(false);
-  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
-  const confirmationResultRef = useRef<FirebaseConfirmationResult | null>(null);
 
   useEffect(() => {
     setTrip(getTrip());
     setCar(getSelectedCar());
     setPassenger(getPassenger() ?? emptyPassenger);
-    refreshFirebaseDiagnostics();
-
-    return () => resetRecaptchaVerifier();
   }, []);
-
-  function refreshFirebaseDiagnostics() {
-    setFirebaseDiagnostics(getFirebaseAuthDiagnostics());
-  }
 
   function updatePassenger<K extends keyof PassengerDetails>(key: K, value: PassengerDetails[K]) {
     setPassenger((current) => {
@@ -80,89 +54,6 @@ export default function BookingPage() {
 
       return { ...current, [key]: value };
     });
-
-    if (key === "mobile") {
-      confirmationResultRef.current = null;
-      setOtpCode("");
-      setOtpMessage("");
-      resetRecaptchaVerifier();
-    }
-  }
-
-  async function sendMobileOtp() {
-    setOtpMessage("");
-    const formattedPhoneNumber = formatIndianPhoneNumber(passenger.mobile);
-
-    if (!formattedPhoneNumber) {
-      setOtpMessage("Please enter a valid 10-digit Indian mobile number.");
-      return;
-    }
-
-    setIsSendingOtp(true);
-    refreshFirebaseDiagnostics();
-
-    try {
-      const confirmationResult = await signInWithPhoneNumber(formattedPhoneNumber, recaptchaContainerId);
-      confirmationResultRef.current = confirmationResult;
-      setPassenger((current) => ({
-        ...current,
-        mobile: formattedPhoneNumber,
-        mobileOtpStatus: "otp_sent",
-        mobileVerified: false
-      }));
-      setOtpMessage("OTP sent. Please enter the code to verify your mobile number.");
-      refreshFirebaseDiagnostics();
-    } catch (error) {
-      recordFirebaseAuthError(error);
-      console.warn("Firebase phone OTP could not be sent.", {
-        error: getSafeOtpConsoleMessage(error)
-      });
-      confirmationResultRef.current = null;
-      resetRecaptchaVerifier();
-      setOtpMessage(getOtpFailureMessage(error));
-      refreshFirebaseDiagnostics();
-    } finally {
-      setIsSendingOtp(false);
-    }
-  }
-
-  async function verifyMobileOtp() {
-    setOtpMessage("");
-
-    if (!confirmationResultRef.current) {
-      setOtpMessage("Please request an OTP before verifying.");
-      return;
-    }
-
-    if (!otpCode.trim()) {
-      setOtpMessage("Please enter the OTP sent to your mobile number.");
-      return;
-    }
-
-    setIsVerifyingOtp(true);
-
-    try {
-      await confirmationResultRef.current.confirm(otpCode.trim());
-      confirmationResultRef.current = null;
-      setPassenger((current) => ({
-        ...current,
-        mobileOtpStatus: "verified",
-        mobileVerified: true
-      }));
-      setOtpCode("");
-      setOtpMessage("Mobile verified.");
-      resetRecaptchaVerifier();
-      refreshFirebaseDiagnostics();
-    } catch (error) {
-      recordFirebaseAuthError(error);
-      console.warn("Firebase phone OTP could not be verified.", {
-        error: getSafeOtpConsoleMessage(error)
-      });
-      setOtpMessage("The OTP could not be verified. Please check the code and try again, or continue booking.");
-      refreshFirebaseDiagnostics();
-    } finally {
-      setIsVerifyingOtp(false);
-    }
   }
 
   function submitBooking(event: FormEvent<HTMLFormElement>) {
@@ -187,7 +78,6 @@ export default function BookingPage() {
 
   const canContinue = Boolean(trip && car && calculateFareBreakup(trip, car).canCalculateFare);
   const canProceedToPayment = canContinue;
-  const otpStatusLabel = formatMobileVerificationStatus(passenger);
 
   return (
     <PageShell
@@ -240,57 +130,7 @@ export default function BookingPage() {
               />
             </label>
 
-            <div className="rounded border border-ink/10 bg-mist p-4 md:col-span-2">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-sm font-semibold">Verify mobile number</p>
-                  <p className="mt-1 flex items-center gap-2 text-sm text-ink/60">
-                    {passenger.mobileVerified ? (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-700" />
-                    ) : (
-                      <ShieldCheck className="h-4 w-4 text-ember" />
-                    )}
-                    Status: {passenger.mobileOtpStatus === "otp_sent" ? "OTP sent" : otpStatusLabel}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={sendMobileOtp}
-                  disabled={!passenger.mobile.trim() || passenger.mobileVerified || isSendingOtp || isVerifyingOtp}
-                  className="inline-flex h-11 items-center justify-center rounded bg-ink px-4 text-sm font-semibold text-white transition hover:bg-ember disabled:cursor-not-allowed disabled:bg-ink/35"
-                >
-                  {isSendingOtp ? "Sending OTP..." : passenger.mobileOtpStatus === "otp_sent" ? "Resend OTP" : "Verify Mobile"}
-                </button>
-              </div>
-
-              {passenger.mobileOtpStatus === "otp_sent" && !passenger.mobileVerified ? (
-                <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_auto]">
-                  <input
-                    value={otpCode}
-                    onChange={(event) => setOtpCode(event.target.value)}
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    placeholder="Enter OTP"
-                    className="h-11 rounded border border-ink/10 bg-white px-4 outline-none transition focus:border-ember focus:ring-2 focus:ring-ember/20"
-                  />
-                  <button
-                    type="button"
-                    onClick={verifyMobileOtp}
-                    disabled={isVerifyingOtp}
-                    className="inline-flex h-11 items-center justify-center rounded bg-ember px-4 text-sm font-semibold text-white transition hover:bg-ink disabled:cursor-not-allowed disabled:bg-ink/35"
-                  >
-                    {isVerifyingOtp ? "Verifying..." : "Verify OTP"}
-                  </button>
-                </div>
-              ) : null}
-
-              <div id={recaptchaContainerId} className="mt-3" />
-              <p className="mt-3 text-sm text-ink/60">
-                Mobile verification is currently in testing and will be made mandatory soon.
-              </p>
-              {otpMessage ? <p className="mt-3 rounded bg-white px-3 py-2 text-sm text-ink/70">{otpMessage}</p> : null}
-              <FirebaseDiagnosticsPanel diagnostics={firebaseDiagnostics} />
-            </div>
+            <p className="text-sm text-ink/60 md:col-span-2">Mobile verification will be enabled soon.</p>
 
             <label className="block md:col-span-2">
               <span className="mb-2 flex items-center gap-2 text-sm font-semibold">
@@ -342,85 +182,4 @@ export default function BookingPage() {
       </div>
     </PageShell>
   );
-}
-
-function FirebaseDiagnosticsPanel({ diagnostics }: { diagnostics: FirebaseAuthDiagnostics }) {
-  const rows = [
-    ["Firebase API key", diagnostics.maskedApiKey],
-    ["Firebase authDomain", diagnostics.authDomain],
-    ["Firebase projectId", diagnostics.projectId],
-    ["Firebase appId present", formatYesNo(diagnostics.appIdPresent)],
-    ["Current browser domain", diagnostics.browserDomain],
-    ["Firebase Auth initialized", formatYesNo(diagnostics.authInitialized)],
-    ["Firebase auth error code", diagnostics.lastAuthErrorCode || "None"]
-  ];
-
-  return (
-    <dl className="mt-4 grid gap-2 rounded bg-white p-3 text-sm">
-      {rows.map(([label, value]) => (
-        <div key={label} className="flex items-start justify-between gap-4">
-          <dt className="text-ink/60">{label}</dt>
-          <dd className="text-right font-semibold text-ink">{value}</dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
-function formatYesNo(value: boolean) {
-  return value ? "Yes" : "No";
-}
-
-function getOtpFailureMessage(error: unknown) {
-  const code = getFirebaseErrorCode(error);
-
-  if (code === "auth/invalid-api-key") {
-    return "Firebase API key is invalid. Please confirm the Web App config values in Vercel match the Firebase Cab-Hailing project.";
-  }
-
-  if (code === "auth/config-mismatch") {
-    return "Firebase configuration changed in this browser session. Please refresh the page before trying mobile verification again. You can continue booking.";
-  }
-
-  return "We could not send the OTP right now. You can continue booking.";
-}
-
-function getFirebaseErrorCode(error: unknown) {
-  if (isObject(error) && typeof error.code === "string") {
-    return error.code;
-  }
-
-  return "";
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
-function formatIndianPhoneNumber(value: string) {
-  const compact = value.replace(/[^\d+]/g, "");
-
-  if (/^\+91[6-9]\d{9}$/.test(compact)) {
-    return compact;
-  }
-
-  const digits = value.replace(/\D/g, "");
-
-  if (/^[6-9]\d{9}$/.test(digits)) {
-    return `+91${digits}`;
-  }
-
-  if (/^91[6-9]\d{9}$/.test(digits)) {
-    return `+${digits}`;
-  }
-
-  return null;
-}
-
-function getSafeOtpConsoleMessage(error: unknown) {
-  if (error instanceof Error && error.message) {
-    return error.message.slice(0, 180);
-  }
-
-  return "Phone verification failed.";
 }
