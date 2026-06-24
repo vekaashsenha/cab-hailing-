@@ -10,7 +10,6 @@ import { PageShell } from "@/components/page-shell";
 import { TripSummary } from "@/components/trip-summary";
 import {
   createBookingId,
-  formatMobileVerificationStatus,
   getPassenger,
   getSelectedCar,
   getTrip,
@@ -25,6 +24,7 @@ import { calculateFareBreakup, formatCurrency } from "@/lib/fare";
 
 const RAZORPAY_CHECKOUT_URL = "https://checkout.razorpay.com/v1/checkout.js";
 const razorpayPublicKeyId = process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID || "";
+const PAYMENT_START_ERROR = "Payment could not be started. Please try again or contact support.";
 
 type RazorpayOrderResponse = {
   orderId?: string;
@@ -115,7 +115,7 @@ export default function PaymentPage() {
     }
 
     if (!razorpayPublicKeyId) {
-      setMessage("Online payment is temporarily unavailable. Please try again shortly.");
+      setMessage(PAYMENT_START_ERROR);
       return;
     }
 
@@ -209,13 +209,6 @@ export default function PaymentPage() {
             </div>
           </div>
 
-          {passenger ? (
-            <div className="mb-6 flex items-center justify-between gap-4 rounded bg-mist px-4 py-3 text-sm">
-              <span className="text-ink/60">Mobile verification</span>
-              <span className="font-semibold text-ink">{formatMobileVerificationStatus(passenger)}</span>
-            </div>
-          ) : null}
-
           <div className="grid gap-4 md:grid-cols-2">
             <div className="rounded border border-ink/10 bg-mist p-5">
               <CreditCard className="mb-5 h-7 w-7 text-ember" />
@@ -269,7 +262,7 @@ async function createRazorpayOrder(amount: number, bookingId: string) {
   const result = (await response.json().catch(() => null)) as RazorpayOrderResponse | null;
 
   if (!response.ok || !result?.orderId || !result.amount || !result.currency) {
-    throw new Error(result?.error || "Payment could not be started. Please retry.");
+    throw new PaymentStartError();
   }
 
   return {
@@ -412,9 +405,20 @@ async function sendBookingEmail(booking: BookingRecord): Promise<OperationsEmail
 }
 
 function getSafeErrorMessage(error: unknown) {
+  if (error instanceof PaymentStartError) {
+    return PAYMENT_START_ERROR;
+  }
+
   if (error instanceof Error && error.message) {
     return error.message;
   }
 
-  return "Payment could not be completed. Please retry.";
+  return "Payment could not be completed. Please try again.";
+}
+
+class PaymentStartError extends Error {
+  constructor() {
+    super(PAYMENT_START_ERROR);
+    this.name = "PaymentStartError";
+  }
 }
