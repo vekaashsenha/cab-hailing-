@@ -24,8 +24,12 @@ export async function POST(request: Request) {
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
 
   if (!keyId || !keySecret) {
+    console.error("Razorpay order configuration is incomplete.", {
+      keyIdPresent: Boolean(keyId),
+      keySecretPresent: Boolean(keySecret)
+    });
     return NextResponse.json(
-      { error: "Online payment is temporarily unavailable. Please try again shortly." },
+      { error: "Payment could not be started. Please try again or contact support." },
       { status: 500 }
     );
   }
@@ -65,13 +69,23 @@ export async function POST(request: Request) {
         receipt: payload.bookingId || undefined
       })
     });
-  } catch {
-    return NextResponse.json({ error: "Payment could not be started. Please retry." }, { status: 502 });
+  } catch (error) {
+    console.error("Razorpay order request failed.", {
+      reason: getSafeServerError(error)
+    });
+    return NextResponse.json(
+      { error: "Payment could not be started. Please try again or contact support." },
+      { status: 502 }
+    );
   }
 
   const order = (await razorpayResponse.json().catch(() => null)) as RazorpayOrderResponse | null;
 
   if (!razorpayResponse.ok || !order?.id || !order.amount || !order.currency) {
+    console.error("Razorpay order creation was rejected.", {
+      status: razorpayResponse.status,
+      reason: order?.error?.reason || "unknown"
+    });
     return NextResponse.json(
       { error: getRazorpayOrderError(order) },
       { status: 502 }
@@ -86,6 +100,14 @@ export async function POST(request: Request) {
   });
 }
 
-function getRazorpayOrderError(order: RazorpayOrderResponse | null) {
-  return "Payment could not be started. Please retry.";
+function getRazorpayOrderError(_order: RazorpayOrderResponse | null) {
+  return "Payment could not be started. Please try again or contact support.";
+}
+
+function getSafeServerError(error: unknown) {
+  if (error instanceof Error) {
+    return error.name;
+  }
+
+  return "unknown";
 }
