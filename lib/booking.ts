@@ -77,6 +77,44 @@ const bookingStorageKeys = [
   passengerKey,
   bookingKey,
   bookingCompletedKey,
+  "trip",
+  "pickup",
+  "pickupLocation",
+  "drop",
+  "dropoff",
+  "dropLocation",
+  "date",
+  "pickupDate",
+  "returnDate",
+  "return date",
+  "time",
+  "pickupTime",
+  "rideType",
+  "ride type",
+  "dailyRentalPackage",
+  "dailyRentalPackageId",
+  "selectedVehicle",
+  "selectedCar",
+  "car",
+  "fare",
+  "fareData",
+  "passenger",
+  "passengerDetails",
+  "payment",
+  "paymentOption",
+  "paymentStatus",
+  "razorpay",
+  "razorpayPayment",
+  "razorpayOrder",
+  "razorpayPaymentId",
+  "razorpayOrderId",
+  "razorpaySignature",
+  "emailStatus",
+  "operationsEmailStatus",
+  "confirmation",
+  "confirmationData",
+  "bookingConfirmation",
+  "booking",
   "cabHailing.payment",
   "cabHailing.paymentOption",
   "cabHailing.paymentStatus",
@@ -338,7 +376,9 @@ export function markBookingCompleted() {
 export function consumeBookingCompletedFlag() {
   const bookingCompleted =
     readJson<boolean>(bookingCompletedKey) === true ||
-    readStorageJson<boolean>(getSessionStorage(), bookingCompletedKey) === true;
+    readStorageJson<boolean>(getSessionStorage(), bookingCompletedKey) === true ||
+    readStorageJson<boolean>(getLocalStorage(), "bookingCompleted") === true ||
+    readStorageJson<boolean>(getSessionStorage(), "bookingCompleted") === true;
 
   if (bookingCompleted) {
     clearBookingState();
@@ -354,6 +394,18 @@ function getSessionStorage() {
 
   try {
     return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function getLocalStorage() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage;
   } catch {
     return null;
   }
